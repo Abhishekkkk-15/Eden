@@ -1,10 +1,14 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import {
   getListPagesQueryKey,
   getListSourcesQueryKey,
   useCreatePage,
   useListPages,
   useListSources,
+  useUpdatePage,
+  useDeletePage,
+  useUpdateSource,
+  useDeleteSource,
   type Page,
   type Source,
 } from "@workspace/api-client-react";
@@ -22,6 +26,10 @@ import {
   Link as LinkIcon,
   Plus,
   Youtube,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  FolderOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,7 +42,15 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { SourceCreateDialog } from "@/components/sources/source-create-dialog";
 import { toast } from "sonner";
 
@@ -53,48 +69,259 @@ function getSourceIcon(kind: string) {
   }
 }
 
-function FolderCard({ folder, onOpen }: { folder: Page; onOpen: () => void }) {
+type DragItem = { type: "folder"; id: number } | { type: "source"; id: number };
+
+function FolderCard({
+  folder,
+  onOpen,
+  onDrop,
+  onRename,
+  onDelete,
+  isDragging,
+  isDropTarget,
+  onDragStart,
+  onDragEnd,
+}: {
+  folder: Page;
+  onOpen: () => void;
+  onDrop: (item: DragItem) => void;
+  onRename: (newTitle: string) => void;
+  onDelete: () => void;
+  isDragging: boolean;
+  isDropTarget: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+}) {
+  const [isRenameOpen, setIsRenameOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [renameTitle, setRenameTitle] = useState(folder.title);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    try {
+      const data = JSON.parse(e.dataTransfer.getData("application/json")) as DragItem;
+      // Prevent dropping folder into itself
+      if (data.type === "folder" && data.id === folder.id) return;
+      onDrop(data);
+    } catch {
+      // Invalid drop data
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData("application/json", JSON.stringify({ type: "folder", id: folder.id }));
+    e.dataTransfer.effectAllowed = "move";
+    onDragStart();
+  };
+
+  const handleRename = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (renameTitle.trim()) {
+      onRename(renameTitle.trim());
+      setIsRenameOpen(false);
+    }
+  };
+
   return (
-    <button type="button" onClick={onOpen} className="group text-left">
-      <Card className="h-full border-border bg-card/50 transition-all hover:-translate-y-0.5 hover:shadow-md">
-        <CardContent className="flex h-full flex-col gap-4 p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-              <Folder className="h-6 w-6" />
-            </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-          </div>
-          <div>
-            <div className="truncate font-medium text-foreground">
-              {folder.emoji ? `${folder.emoji} ` : ""}
-              {folder.title}
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">Folder</div>
-          </div>
-        </CardContent>
-      </Card>
-    </button>
+    <>
+      <div
+        draggable
+        onDragStart={handleDragStart}
+        onDragEnd={onDragEnd}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`group relative ${isDragging ? "opacity-50" : ""}`}>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="w-full text-left">
+          <Card
+            className={`h-full border-border bg-card/50 transition-all hover:-translate-y-0.5 hover:shadow-md ${
+              isDragOver || isDropTarget ? "ring-2 ring-primary ring-offset-2" : ""
+            }`}>
+            <CardContent className="flex h-full flex-col gap-4 p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <Folder className="h-6 w-6" />
+                </div>
+                <div className="flex items-center gap-1">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => e.stopPropagation()}>
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsRenameOpen(true);
+                        }}>
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Rename
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsDeleteOpen(true);
+                        }}>
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </div>
+              <div>
+                <div className="truncate font-medium text-foreground">
+                  {folder.emoji ? `${folder.emoji} ` : ""}
+                  {folder.title}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">Folder</div>
+              </div>
+            </CardContent>
+          </Card>
+        </button>
+      </div>
+
+      <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename folder</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleRename} className="space-y-4">
+            <Input
+              value={renameTitle}
+              onChange={(e) => setRenameTitle(e.target.value)}
+              placeholder="Folder name"
+              autoFocus
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsRenameOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Rename</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete folder</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{folder.title}"? All contents including subfolders and
+              files will be permanently deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={onDelete}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
-function SourceCard({ source }: { source: Source }) {
+function SourceCard({
+  source,
+  onRename,
+  onDelete,
+  onMove,
+}: {
+  source: Source;
+  onRename: (newTitle: string) => void;
+  onDelete: () => void;
+  onMove: (targetFolderId: number | null) => void;
+}) {
+  const [isRenameOpen, setIsRenameOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isMoveOpen, setIsMoveOpen] = useState(false);
+  const [renameTitle, setRenameTitle] = useState(source.title);
+
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData("application/json", JSON.stringify({ type: "source", id: source.id }));
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleRename = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (renameTitle.trim()) {
+      onRename(renameTitle.trim());
+      setIsRenameOpen(false);
+    }
+  };
+
   return (
-    <Link href={`/sources/${source.id}`}>
-      <Card className="h-full cursor-pointer border-border bg-card/50 transition-all hover:-translate-y-0.5 hover:shadow-md">
-        <CardContent className="flex h-full flex-col gap-4 p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/50 text-muted-foreground">
-              {getSourceIcon(source.kind)}
+    <>
+      <div draggable onDragStart={handleDragStart} className="group relative">
+        <Card className="h-full border-border bg-card/50 transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <CardContent className="flex h-full flex-col gap-4 p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/50 text-muted-foreground">
+                {getSourceIcon(source.kind)}
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant={source.status === "ready" ? "secondary" : "outline"}>
+                  {source.status}
+                </Badge>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setIsMoveOpen(true)}>
+                      <FolderOpen className="h-4 w-4 mr-2" />
+                      Move to...
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setIsRenameOpen(true)}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => setIsDeleteOpen(true)}>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
-            <Badge
-              variant={source.status === "ready" ? "secondary" : "outline"}>
-              {source.status}
-            </Badge>
-          </div>
-          <div className="min-w-0">
-            <div className="truncate font-medium text-foreground">
-              {source.title}
-            </div>
+            <Link href={`/sources/${source.id}`} className="min-w-0">
+              <div className="truncate font-medium text-foreground hover:underline">
+                {source.title}
+              </div>
+            </Link>
             <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
               <span className="capitalize">{source.kind}</span>
               <span>•</span>
@@ -103,10 +330,126 @@ function SourceCard({ source }: { source: Source }) {
             <div className="mt-2 text-xs text-muted-foreground">
               {format(new Date(source.createdAt), "MMM d, yyyy")}
             </div>
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename file</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleRename} className="space-y-4">
+            <Input
+              value={renameTitle}
+              onChange={(e) => setRenameTitle(e.target.value)}
+              placeholder="File name"
+              autoFocus
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsRenameOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Rename</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete file</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{source.title}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={onDelete}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <MoveDialog
+        open={isMoveOpen}
+        onOpenChange={setIsMoveOpen}
+        currentFolderId={source.parentPageId}
+        onMove={onMove}
+      />
+    </>
+  );
+}
+
+function MoveDialog({
+  open,
+  onOpenChange,
+  currentFolderId,
+  onMove,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentFolderId: number | null;
+  onMove: (targetFolderId: number | null) => void;
+}) {
+  const { data: pages } = useListPages();
+  const folderPages =
+    Array.isArray(pages) ? pages.filter((page) => page.kind === "folder") : [];
+
+  const buildFolderTree = (parentId: number | null, excludeId?: number): Page[] => {
+    return folderPages.filter(
+      (f) => (f.parentId ?? null) === parentId && f.id !== excludeId
+    );
+  };
+
+  const renderFolderTree = (parentId: number | null, level = 0, excludeId?: number) => {
+    const folders = buildFolderTree(parentId, excludeId);
+    return folders.map((folder) => (
+      <div key={folder.id}>
+        <button
+          type="button"
+          onClick={() => {
+            onMove(folder.id);
+            onOpenChange(false);
+          }}
+          className="w-full text-left px-3 py-2 hover:bg-accent rounded-md flex items-center gap-2 transition-colors"
+          style={{ paddingLeft: `${12 + level * 16}px` }}>
+          <Folder className="h-4 w-4 text-primary" />
+          <span className="truncate">{folder.emoji ? `${folder.emoji} ` : ""}{folder.title}</span>
+        </button>
+        {renderFolderTree(folder.id, level + 1, excludeId)}
+      </div>
+    ));
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Move to folder</DialogTitle>
+          <DialogDescription>Select a destination folder</DialogDescription>
+        </DialogHeader>
+        <div className="overflow-y-auto py-2 space-y-1">
+          <button
+            type="button"
+            onClick={() => {
+              onMove(null);
+              onOpenChange(false);
+            }}
+            className={`w-full text-left px-3 py-2 hover:bg-accent rounded-md flex items-center gap-2 transition-colors ${
+              currentFolderId === null ? "bg-accent" : ""
+            }`}>
+            <Database className="h-4 w-4 text-muted-foreground" />
+            <span>My Drive (root)</span>
+          </button>
+          {renderFolderTree(null)}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -174,6 +517,17 @@ export default function SourcesList() {
   const { data: sources, isLoading: sourcesLoading } = useListSources();
   const { data: pages, isLoading: pagesLoading } = useListPages();
   const [location, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+
+  // Mutations
+  const updatePage = useUpdatePage();
+  const deletePage = useDeletePage();
+  const updateSource = useUpdateSource();
+  const deleteSource = useDeleteSource();
+
+  // Drag state
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<number | null>(null);
 
   const folderId = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -230,6 +584,138 @@ export default function SourcesList() {
     return chain;
   }, [currentFolder, folderPages]);
 
+  // Folder operations
+  const handleFolderRename = useCallback(
+    async (folderId: number, newTitle: string) => {
+      try {
+        await updatePage.mutateAsync({
+          id: folderId,
+          data: { title: newTitle },
+        });
+        await queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() });
+        toast.success("Folder renamed");
+      } catch {
+        toast.error("Failed to rename folder");
+      }
+    },
+    [updatePage, queryClient],
+  );
+
+  const handleFolderDelete = useCallback(
+    async (folderId: number) => {
+      try {
+        await deletePage.mutateAsync({ id: folderId });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() }),
+          queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() }),
+        ]);
+        toast.success("Folder deleted");
+      } catch {
+        toast.error("Failed to delete folder");
+      }
+    },
+    [deletePage, queryClient],
+  );
+
+  const handleFolderDrop = useCallback(
+    async (targetFolderId: number, item: DragItem) => {
+      try {
+        if (item.type === "folder") {
+          // Move folder into another folder
+          await updatePage.mutateAsync({
+            id: item.id,
+            data: { parentId: targetFolderId },
+          });
+        } else {
+          // Move source into folder
+          await updateSource.mutateAsync({
+            id: item.id,
+            data: { parentPageId: targetFolderId },
+          });
+        }
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() }),
+          queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() }),
+        ]);
+        toast.success(item.type === "folder" ? "Folder moved" : "File moved");
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error && err.message.includes("circular")
+          ? "Cannot move a folder into its own subfolder"
+          : `Failed to move ${item.type}`;
+        toast.error(errorMessage);
+      }
+    },
+    [updatePage, updateSource, queryClient],
+  );
+
+  // Source operations
+  const handleSourceRename = useCallback(
+    async (sourceId: number, newTitle: string) => {
+      try {
+        await updateSource.mutateAsync({
+          id: sourceId,
+          data: { title: newTitle },
+        });
+        await queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
+        toast.success("File renamed");
+      } catch {
+        toast.error("Failed to rename file");
+      }
+    },
+    [updateSource, queryClient],
+  );
+
+  const handleSourceDelete = useCallback(
+    async (sourceId: number) => {
+      try {
+        await deleteSource.mutateAsync({ id: sourceId });
+        await queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
+        toast.success("File deleted");
+      } catch {
+        toast.error("Failed to delete file");
+      }
+    },
+    [deleteSource, queryClient],
+  );
+
+  const handleSourceMove = useCallback(
+    async (sourceId: number, targetFolderId: number | null) => {
+      try {
+        await updateSource.mutateAsync({
+          id: sourceId,
+          data: { parentPageId: targetFolderId },
+        });
+        await queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
+        toast.success("File moved");
+      } catch {
+        toast.error("Failed to move file");
+      }
+    },
+    [updateSource, queryClient],
+  );
+
+  // Root drop zone handler (for dropping to current folder)
+  const handleRootDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      try {
+        const data = JSON.parse(e.dataTransfer.getData("application/json")) as DragItem;
+        if (data.type === "source") {
+          // Move source to current folder
+          await updateSource.mutateAsync({
+            id: data.id,
+            data: { parentPageId: folderId },
+          });
+          await queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
+          toast.success("File moved");
+        }
+      } catch {
+        // Invalid drop or not a source
+      }
+    },
+    [folderId, updateSource, queryClient],
+  );
+
   const isLoading = sourcesLoading || pagesLoading;
 
   if (folderId != null && !currentFolder && !isLoading) {
@@ -251,7 +737,10 @@ export default function SourcesList() {
   }
 
   return (
-    <div className="min-h-full bg-background/50">
+    <div
+      className="min-h-full bg-background/50"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={handleRootDrop}>
       <div className="mx-auto max-w-7xl px-8 py-8 space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -282,7 +771,7 @@ export default function SourcesList() {
               {currentFolder ? currentFolder.title : "My Drive"}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Folders and source files with search-ready content.
+              Folders and source files with search-ready content. Drag to organize.
             </p>
           </div>
 
@@ -382,6 +871,16 @@ export default function SourcesList() {
                       key={folder.id}
                       folder={folder}
                       onOpen={() => setLocation(`/sources?folder=${folder.id}`)}
+                      onDrop={(item) => handleFolderDrop(folder.id, item)}
+                      onRename={(newTitle) => handleFolderRename(folder.id, newTitle)}
+                      onDelete={() => handleFolderDelete(folder.id)}
+                      isDragging={draggingId === folder.id}
+                      isDropTarget={dropTargetId === folder.id}
+                      onDragStart={() => setDraggingId(folder.id)}
+                      onDragEnd={() => {
+                        setDraggingId(null);
+                        setDropTargetId(null);
+                      }}
                     />
                   ))}
                 </div>
@@ -395,7 +894,13 @@ export default function SourcesList() {
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                   {childFiles.map((source) => (
-                    <SourceCard key={source.id} source={source} />
+                    <SourceCard
+                      key={source.id}
+                      source={source}
+                      onRename={(newTitle) => handleSourceRename(source.id, newTitle)}
+                      onDelete={() => handleSourceDelete(source.id)}
+                      onMove={(targetFolderId) => handleSourceMove(source.id, targetFolderId)}
+                    />
                   ))}
                 </div>
               </section>

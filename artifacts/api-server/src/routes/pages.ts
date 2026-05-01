@@ -84,9 +84,39 @@ router.get("/pages/:id", async (req, res) => {
   res.json({ ...page, blocks });
 });
 
+async function wouldCreateCycle(folderId: number, newParentId: number | null): Promise<boolean> {
+  if (newParentId === null) return false;
+  if (folderId === newParentId) return true;
+
+  const allPages = await db.select().from(pagesTable);
+  const parentById = new Map<number, number | null>();
+
+  for (const page of allPages) {
+    parentById.set(page.id, page.parentId ?? null);
+  }
+
+  let cursor: number | null = newParentId;
+  while (cursor !== null) {
+    if (cursor === folderId) return true;
+    cursor = parentById.get(cursor) ?? null;
+  }
+
+  return false;
+}
+
 router.patch("/pages/:id", async (req, res) => {
   const { id } = UpdatePageParams.parse(req.params);
   const body = UpdatePageBody.parse(req.body);
+
+  // Prevent circular reference when moving folders
+  if (body.parentId !== undefined && body.parentId !== null) {
+    const wouldCycle = await wouldCreateCycle(id, body.parentId);
+    if (wouldCycle) {
+      res.status(400).json({ error: "Cannot move a folder into its own descendant" });
+      return;
+    }
+  }
+
   const updates: Record<string, unknown> = {};
   if (body.kind !== undefined) updates.kind = body.kind;
   if (body.title !== undefined) updates.title = body.title;
