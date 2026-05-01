@@ -1,0 +1,275 @@
+Build a production-grade monorepo-based full-stack application called "Eden AI Workspace", inspired by eden.so.
+ 
+This is NOT a demo project. It must follow real-world scalable architecture using a monorepo setup.
+ 
+---
+ 
+🏗️ MONOREPO SETUP (MANDATORY)
+ 
+Use Turborepo + PNPM workspaces
+ 
+Root structure:
+ 
+/apps
+/web        → Next.js frontend (App Router)
+/api        → Backend (Next.js API routes or Express)
+ 
+/packages
+/ui         → Shared UI components (ShadCN आधारित reusable components)
+/db         → Prisma schema + client
+/ai         → NVIDIA NIM integration + RAG logic
+/config     → Shared configs (tsconfig, eslint, tailwind)
+/types      → Shared TypeScript types
+ 
+---
+ 
+⚙️ TECH STACK
+ 
+Frontend (apps/web):
+ 
+- Next.js (App Router)
+- TypeScript
+- TailwindCSS
+- ShadCN UI
+- Zustand
+ 
+Backend (apps/api):
+ 
+- Node.js / Next.js API routes
+- Prisma ORM
+- PostgreSQL (Neon/Supabase)
+ 
+AI Layer (packages/ai):
+ 
+- NVIDIA NIM API (PRIMARY)
+- Free hosted models only
+- OpenAI-compatible fallback support
+ 
+Storage:
+ 
+- Cloudinary or S3
+ 
+Realtime:
+ 
+- Socket.IO
+ 
+---
+ 
+🧠 AI + RAG SYSTEM (IN packages/ai)
+ 
+Implement modular services:
+ 
+- ingestionService.ts
+- processingService.ts
+- embeddingService.ts
+- retrievalService.ts
+- generationService.ts
+ 
+Pipeline:
+ 
+1. Ingestion → files + URLs
+2. Processing → extract + clean + chunk
+3. Embeddings → NVIDIA NIM
+4. Storage → PostgreSQL (pgvector)
+5. Retrieval → semantic search
+6. Generation → LLM response (streaming)
+ 
+---
+ 
+🚀 FEATURES
+ 
+1. 🧾 Notion-Style Workspace (apps/web + packages/ui)
+ 
+- Sidebar with nested pages
+- Block-based editor
+- Slash commands (/heading, /todo, /code)
+- Drag-and-drop blocks
+ 
+---
+ 
+2. 📂 File & Media Hub
+ 
+- Upload PDFs/images/text
+- Save YouTube/blog links
+- Auto transcript + scraping
+- Store metadata
+ 
+---
+ 
+3. 💬 AI Chat (RAG)
+ 
+- Workspace-aware chat
+- Streaming responses
+- Source citations
+ 
+---
+ 
+4. 🔍 Semantic Search
+ 
+- Global search across all content
+- Highlight relevant chunks
+ 
+---
+ 
+5. 🧠 AI Agents (packages/ai)
+ 
+- Create custom agents:
+  
+  - name
+  - prompt
+  - variables
+ 
+- Run agents on selected content
+ 
+---
+ 
+6. 🎨 Canvas View
+ 
+- Drag-and-drop workspace
+- Save layout positions
+ 
+---
+ 
+7. 👥 Collaboration
+ 
+- Multi-user workspaces
+- Roles: owner/editor/viewer
+- Real-time updates via sockets
+ 
+---
+ 
+🗂️ DATABASE (packages/db)
+ 
+Use Prisma:
+ 
+Models:
+ 
+- User
+- Workspace
+- WorkspaceMember
+- Page
+- Block
+- File
+- ContentSource
+- ContentChunk
+- Embedding (vector)
+- Agent
+- Chat
+- Message
+ 
+Use pgvector for embeddings.
+ 
+---
+ 
+📦 PACKAGE RESPONSIBILITIES
+ 
+packages/ui
+ 
+- Shared components (Sidebar, Editor, ChatPanel, etc.)
+- Reusable design system
+ 
+packages/db
+ 
+- Prisma schema
+- Prisma client export
+ 
+packages/ai
+ 
+- NVIDIA NIM integration (nim.ts)
+- RAG pipeline
+- Agent system
+ 
+packages/types
+ 
+- Shared interfaces (User, Workspace, AI types)
+ 
+packages/config
+ 
+- Shared tsconfig, eslint, tailwind config
+ 
+---
+ 
+📁 APPS RESPONSIBILITIES
+ 
+apps/web
+ 
+- UI rendering
+- State management
+- API calls
+ 
+apps/api
+ 
+- Route handlers:
+  
+  - /upload
+  - /chat
+  - /search
+  - /agents
+  - /workspace
+ 
+- Calls packages:
+  
+  - db
+  - ai
+ 
+---
+ 
+⚠️ NVIDIA NIM INTEGRATION (packages/ai/nim.ts)
+ 
+- Implement:
+  
+  - generateText()
+  - generateEmbeddings()
+ 
+- Use environment variables
+ 
+- Support streaming responses
+ 
+- Follow OpenAI-compatible API structure if available
+ 
+---
+ 
+🎨 UI REQUIREMENTS
+ 
+- Premium minimal UI (Notion + Eden + Linear)
+- Smooth animations
+- Command palette (Ctrl+K)
+- Skeleton loaders
+- Fully responsive
+ 
+---
+ 
+⚙️ RULES
+ 
+- Strict modular architecture
+- No duplicate logic across apps
+- Shared code must go into packages
+- No mock data — real implementation only
+- Proper error handling
+ 
+---
+ 
+🧪 DEV SETUP
+ 
+- Use PNPM workspaces
+- Turbo tasks:
+  - build
+  - dev
+  - lint
+ 
+---
+ 
+🎯 OUTPUT
+ 
+- Fully working monorepo
+- Clean architecture
+- Scalable structure
+- Production-quality code
+ 
+---
+ 
+Focus on:
+correct architecture, modularity, and real-world engineering practices
+Eden – All Content, Files, & AI In One Place
+Upload files, paste YouTube links, and have all your information in one place, accessible to Eden AI.
+ 

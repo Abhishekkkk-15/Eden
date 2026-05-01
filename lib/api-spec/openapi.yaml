@@ -1,0 +1,786 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Eden AI Workspace API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+  - name: pages
+  - name: blocks
+  - name: sources
+  - name: search
+  - name: chat
+  - name: agents
+  - name: dashboard
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /pages:
+    get:
+      operationId: listPages
+      tags: [pages]
+      summary: List all pages in the workspace (flat tree)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Page"
+    post:
+      operationId: createPage
+      tags: [pages]
+      summary: Create a page
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePageInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Page"
+
+  /pages/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getPage
+      tags: [pages]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageWithBlocks"
+        "404":
+          description: Not found
+    patch:
+      operationId: updatePage
+      tags: [pages]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePageInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Page"
+    delete:
+      operationId: deletePage
+      tags: [pages]
+      responses:
+        "204":
+          description: Deleted
+
+  /pages/{id}/blocks:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: createBlock
+      tags: [blocks]
+      summary: Append a new block to a page
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBlockInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Block"
+
+  /blocks/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    patch:
+      operationId: updateBlock
+      tags: [blocks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBlockInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Block"
+    delete:
+      operationId: deleteBlock
+      tags: [blocks]
+      responses:
+        "204":
+          description: Deleted
+
+  /pages/{id}/blocks/reorder:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: reorderBlocks
+      tags: [blocks]
+      summary: Reorder blocks on a page
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderBlocksInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Block"
+
+  /sources:
+    get:
+      operationId: listSources
+      tags: [sources]
+      summary: List text, URL, YouTube, image, and video sources
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Source"
+    post:
+      operationId: createSource
+      tags: [sources]
+      summary: Create a source from text, URL, YouTube, image, or video
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSourceInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Source"
+
+  /sources/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getSource
+      tags: [sources]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceWithChunks"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateSource
+      tags: [sources]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSourceInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Source"
+    delete:
+      operationId: deleteSource
+      tags: [sources]
+      responses:
+        "204":
+          description: Deleted
+
+  /search:
+    get:
+      operationId: searchWorkspace
+      tags: [search]
+      summary: Semantic-style full-text search across pages and sources
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SearchResult"
+
+  /conversations:
+    get:
+      operationId: listConversations
+      tags: [chat]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+    post:
+      operationId: createConversation
+      tags: [chat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+
+  /conversations/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getConversation
+      tags: [chat]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationWithMessages"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteConversation
+      tags: [chat]
+      responses:
+        "204":
+          description: Deleted
+
+  /conversations/{id}/messages:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: sendMessage
+      tags: [chat]
+      summary: Send a chat message and stream the AI response (SSE)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageInput"
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /agents:
+    get:
+      operationId: listAgents
+      tags: [agents]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Agent"
+    post:
+      operationId: createAgent
+      tags: [agents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAgentInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+
+  /agents/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    patch:
+      operationId: updateAgent
+      tags: [agents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAgentInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+    delete:
+      operationId: deleteAgent
+      tags: [agents]
+      responses:
+        "204":
+          description: Deleted
+
+  /agents/{id}/run:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: runAgent
+      tags: [agents]
+      summary: Run an agent against optional context (returns final text)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunAgentInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRunResult"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Counts and recent activity for the home view
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/recent:
+    get:
+      operationId: getRecentActivity
+      tags: [dashboard]
+      summary: Recent pages, sources, and conversations
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RecentActivityItem"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    Page:
+      type: object
+      properties:
+        id: { type: integer }
+        kind:
+          type: string
+          enum: [page, folder]
+        title: { type: string }
+        emoji: { type: ["string", "null"] }
+        parentId: { type: ["integer", "null"] }
+        position: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, kind, title, emoji, parentId, position, createdAt, updatedAt]
+
+    PageWithBlocks:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            blocks:
+              type: array
+              items:
+                $ref: "#/components/schemas/Block"
+          required: [blocks]
+
+    CreatePageInput:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [page, folder]
+        title: { type: string }
+        emoji: { type: ["string", "null"] }
+        parentId: { type: ["integer", "null"] }
+      required: [title]
+
+    UpdatePageInput:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [page, folder]
+        title: { type: string }
+        emoji: { type: ["string", "null"] }
+        parentId: { type: ["integer", "null"] }
+        position: { type: integer }
+
+    Block:
+      type: object
+      properties:
+        id: { type: integer }
+        pageId: { type: integer }
+        type:
+          type: string
+          enum: [text, heading1, heading2, heading3, todo, bulleted, numbered, quote, code, divider]
+        content: { type: string }
+        checked: { type: boolean }
+        position: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, pageId, type, content, checked, position, createdAt, updatedAt]
+
+    CreateBlockInput:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [text, heading1, heading2, heading3, todo, bulleted, numbered, quote, code, divider]
+        content: { type: string }
+        checked: { type: boolean }
+        position: { type: integer }
+      required: [type, content]
+
+    UpdateBlockInput:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [text, heading1, heading2, heading3, todo, bulleted, numbered, quote, code, divider]
+        content: { type: string }
+        checked: { type: boolean }
+        position: { type: integer }
+
+    ReorderBlocksInput:
+      type: object
+      properties:
+        orderedIds:
+          type: array
+          items:
+            type: integer
+      required: [orderedIds]
+
+    Source:
+      type: object
+      properties:
+        id: { type: integer }
+        kind:
+          type: string
+          enum: [text, url, youtube, image, video]
+        title: { type: string }
+        url: { type: ["string", "null"] }
+        parentPageId: { type: ["integer", "null"] }
+        mediaUrl: { type: ["string", "null"] }
+        embedUrl: { type: ["string", "null"] }
+        mediaMimeType: { type: ["string", "null"] }
+        mediaSizeBytes: { type: ["integer", "null"] }
+        summary: { type: ["string", "null"] }
+        chunkCount: { type: integer }
+        status:
+          type: string
+          enum: [processing, ready, error]
+        createdAt: { type: string, format: date-time }
+      required: [id, kind, title, url, parentPageId, mediaUrl, embedUrl, mediaMimeType, mediaSizeBytes, summary, chunkCount, status, createdAt]
+
+    SourceWithChunks:
+      allOf:
+        - $ref: "#/components/schemas/Source"
+        - type: object
+          properties:
+            content: { type: string }
+            chunks:
+              type: array
+              items:
+                $ref: "#/components/schemas/SourceChunk"
+          required: [content, chunks]
+
+    SourceChunk:
+      type: object
+      properties:
+        id: { type: integer }
+        sourceId: { type: integer }
+        position: { type: integer }
+        content: { type: string }
+      required: [id, sourceId, position, content]
+
+    CreateSourceInput:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [text, url, youtube, image, video]
+        title: { type: string }
+        content: { type: ["string", "null"] }
+        url: { type: ["string", "null"] }
+        parentPageId: { type: ["integer", "null"] }
+        fileDataUrl: { type: ["string", "null"] }
+        originalFilename: { type: ["string", "null"] }
+        mediaMimeType: { type: ["string", "null"] }
+      required: [kind, title]
+
+    UpdateSourceInput:
+      type: object
+      properties:
+        title: { type: string }
+        parentPageId: { type: ["integer", "null"] }
+
+    SearchResult:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [page, block, source, chunk]
+        refId: { type: integer }
+        pageId: { type: ["integer", "null"] }
+        sourceId: { type: ["integer", "null"] }
+        title: { type: string }
+        snippet: { type: string }
+        score: { type: number }
+      required: [kind, refId, pageId, sourceId, title, snippet, score]
+
+    Conversation:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        agentId: { type: ["integer", "null"] }
+        messageCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, title, agentId, messageCount, createdAt, updatedAt]
+
+    ConversationWithMessages:
+      allOf:
+        - $ref: "#/components/schemas/Conversation"
+        - type: object
+          properties:
+            messages:
+              type: array
+              items:
+                $ref: "#/components/schemas/Message"
+          required: [messages]
+
+    Message:
+      type: object
+      properties:
+        id: { type: integer }
+        conversationId: { type: integer }
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content: { type: string }
+        citations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Citation"
+        createdAt: { type: string, format: date-time }
+      required: [id, conversationId, role, content, citations, createdAt]
+
+    Citation:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [page, source]
+        refId: { type: integer }
+        title: { type: string }
+        snippet: { type: string }
+      required: [kind, refId, title, snippet]
+
+    CreateConversationInput:
+      type: object
+      properties:
+        title: { type: string }
+        agentId: { type: ["integer", "null"] }
+      required: [title]
+
+    SendMessageInput:
+      type: object
+      properties:
+        content: { type: string }
+      required: [content]
+
+    Agent:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string }
+        emoji: { type: string }
+        prompt: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, name, description, emoji, prompt, createdAt, updatedAt]
+
+    CreateAgentInput:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        emoji: { type: string }
+        prompt: { type: string }
+      required: [name, description, emoji, prompt]
+
+    UpdateAgentInput:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        emoji: { type: string }
+        prompt: { type: string }
+
+    RunAgentInput:
+      type: object
+      properties:
+        input: { type: string }
+        useWorkspaceContext: { type: boolean }
+      required: [input]
+
+    AgentRunResult:
+      type: object
+      properties:
+        output: { type: string }
+        citations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Citation"
+      required: [output, citations]
+
+    DashboardSummary:
+      type: object
+      properties:
+        pageCount: { type: integer }
+        sourceCount: { type: integer }
+        agentCount: { type: integer }
+        conversationCount: { type: integer }
+        messageCount: { type: integer }
+      required: [pageCount, sourceCount, agentCount, conversationCount, messageCount]
+
+    RecentActivityItem:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [page, source, conversation]
+        refId: { type: integer }
+        title: { type: string }
+        subtitle: { type: ["string", "null"] }
+        updatedAt: { type: string, format: date-time }
+      required: [kind, refId, title, subtitle, updatedAt]
