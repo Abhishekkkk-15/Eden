@@ -1,0 +1,17 @@
+{
+  "name": "@workspace/integrations-nvidia-nim-ai-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./asr": "./src/asr/index.ts"
+  },
+  "dependencies": {
+    "p-limit": "^7.3.0",
+    "p-retry": "^7.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
+  }
+}

@@ -27,7 +27,21 @@ export const sourceChunksTable = pgTable("source_chunks", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const transcriptionsTable = pgTable("transcriptions", {
+  id: serial("id").primaryKey(),
+  sourceId: integer("source_id").notNull().unique(),
+  content: text("content").notNull(),
+  model: text("model").notNull().default("whisper-1"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
 export type Source = typeof sourcesTable.$inferSelect;
 export type InsertSource = typeof sourcesTable.$inferInsert;
 export type SourceChunk = typeof sourceChunksTable.$inferSelect;
 export type InsertSourceChunk = typeof sourceChunksTable.$inferInsert;
+export type Transcription = typeof transcriptionsTable.$inferSelect;
+export type InsertTranscription = typeof transcriptionsTable.$inferInsert;

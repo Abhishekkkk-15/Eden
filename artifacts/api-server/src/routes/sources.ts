@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, sourcesTable, sourceChunksTable, pagesTable } from "@workspace/db";
-import { asc, eq, sql } from "drizzle-orm";
+import { db, sourcesTable, sourceChunksTable, pagesTable, blocksTable, transcriptionsTable } from "@workspace/db";
+import { and, asc, eq, sql } from "drizzle-orm";
 import {
   CreateSourceBody,
   GetSourceParams,
@@ -19,6 +19,7 @@ import {
   persistUploadedFile,
   removeUploadedFile,
 } from "../lib/source-media";
+import { transcribeSource } from "../lib/transcription";
 
 const router: IRouter = Router();
 
@@ -35,6 +36,7 @@ type SourceListRow = {
   chunkCount: number;
   status: string;
   createdAt: string;
+  isPage?: boolean;
 };
 
 function toSourceResponse(row: SourceListRow) {
@@ -52,6 +54,7 @@ function toSourceResponse(row: SourceListRow) {
     chunkCount: row.chunkCount,
     status: row.status,
     createdAt: row.createdAt,
+    isPage: row.isPage ?? false,
   };
 }
 
@@ -81,12 +84,29 @@ async function fetchUrl(url: string): Promise<string> {
 }
 
 router.get("/sources", async (_req, res) => {
+  // Union query to get both sources and pages (documents) in one list
   const rows = await db.execute(sql`
-    SELECT s.id, s.kind, s.title, s.url, s.parent_page_id, s.media_path, s.media_mime_type, s.media_size_bytes,
-           s.summary, s.status, s.created_at,
-           (SELECT count(*) FROM source_chunks c WHERE c.source_id = s.id) AS chunk_count
-    FROM sources s
-    ORDER BY s.created_at DESC
+    SELECT 
+      id, kind, title, url, parent_page_id, media_path, media_mime_type, media_size_bytes,
+      summary, status, created_at, chunk_count, is_page
+    FROM (
+      SELECT 
+        s.id, s.kind, s.title, s.url, s.parent_page_id, s.media_path, s.media_mime_type, s.media_size_bytes,
+        s.summary, s.status, s.created_at,
+        (SELECT count(*) FROM source_chunks c WHERE c.source_id = s.id) AS chunk_count,
+        false as is_page
+      FROM sources s
+      UNION ALL
+      SELECT 
+        p.id, 'page' as kind, p.title, null as url, p.parent_id as parent_page_id, 
+        null as media_path, null as media_mime_type, null as media_size_bytes,
+        null as summary, 'ready' as status, p.created_at,
+        0 as chunk_count,
+        true as is_page
+      FROM pages p
+      WHERE p.kind = 'page'
+    ) combined
+    ORDER BY created_at DESC
   `);
   res.json(
     (rows.rows as Array<Record<string, unknown>>).map((r) =>
@@ -104,6 +124,7 @@ router.get("/sources", async (_req, res) => {
         chunkCount: Number(r.chunk_count) || 0,
         status: String(r.status),
         createdAt: new Date(r.created_at as string).toISOString(),
+        isPage: Boolean(r.is_page),
       }),
     ),
   );
@@ -220,6 +241,20 @@ router.post("/sources", async (req, res) => {
   void (async () => {
     try {
       let content = body.content ?? "";
+      let transcription: string | null = null;
+
+      // Run transcription for media files in parallel with other processing
+      if (["video", "audio", "image"].includes(body.kind)) {
+        void (async () => {
+          try {
+            await transcribeSource(pending.id, body.kind, mediaPath);
+            req.log.info({ sourceId: pending.id, kind: body.kind }, "transcription completed");
+          } catch (txErr) {
+            req.log.warn({ err: txErr, sourceId: pending.id }, "transcription failed (non-critical)");
+          }
+        })();
+      }
+
       if (body.kind === "url" || body.kind === "youtube") {
         if (!body.url) throw new Error("URL is required for URL-based sources");
         content = await fetchUrl(body.url);
@@ -310,6 +345,31 @@ router.get("/sources/:id", async (req, res) => {
   });
 });
 
+// Get transcription for a source
+router.get("/sources/:id/transcription", async (req, res) => {
+  const { id } = GetSourceParams.parse(req.params);
+  const [transcription] = await db
+    .select({
+      id: transcriptionsTable.id,
+      content: transcriptionsTable.content,
+      model: transcriptionsTable.model,
+      createdAt: transcriptionsTable.createdAt,
+    })
+    .from(transcriptionsTable)
+    .where(eq(transcriptionsTable.sourceId, id));
+  
+  if (!transcription) {
+    res.status(404).json({ error: "Transcription not found" });
+    return;
+  }
+  
+  res.json({
+    sourceId: id,
+    ...transcription,
+    createdAt: transcription.createdAt.toISOString(),
+  });
+});
+
 router.patch("/sources/:id", async (req, res) => {
   const { id } = UpdateSourceParams.parse(req.params);
   const body = UpdateSourceBody.parse(req.body);
@@ -325,16 +385,51 @@ router.patch("/sources/:id", async (req, res) => {
     }
   }
 
-  const updates: Record<string, unknown> = {};
-  if (body.title !== undefined) updates.title = body.title;
-  if (body.parentPageId !== undefined) updates.parentPageId = body.parentPageId;
+  // First, try to find and update as a source
+  const [source] = await db.select().from(sourcesTable).where(eq(sourcesTable.id, id));
+  
+  if (source) {
+    // It's a source - update it
+    const updates: Record<string, unknown> = {};
+    if (body.title !== undefined) updates.title = body.title;
+    if (body.parentPageId !== undefined) updates.parentPageId = body.parentPageId;
 
-  if (Object.keys(updates).length === 0) {
-    const [source] = await db.select().from(sourcesTable).where(eq(sourcesTable.id, id));
-    if (!source) {
+    if (Object.keys(updates).length === 0) {
+      const chunkRows = await db.execute(sql`
+        SELECT count(*) AS chunk_count
+        FROM source_chunks
+        WHERE source_id = ${id}
+      `);
+      const chunkCount = Number((chunkRows.rows[0] as Record<string, unknown> | undefined)?.chunk_count ?? 0);
+      res.json(
+        toSourceResponse({
+          id: source.id,
+          kind: source.kind,
+          title: source.title,
+          url: source.url,
+          parentPageId: source.parentPageId,
+          mediaPath: source.mediaPath,
+          mediaMimeType: source.mediaMimeType,
+          mediaSizeBytes: source.mediaSizeBytes,
+          summary: source.summary,
+          chunkCount,
+          status: source.status,
+          createdAt: source.createdAt.toISOString(),
+        }),
+      );
+      return;
+    }
+
+    const [updated] = await db
+      .update(sourcesTable)
+      .set(updates)
+      .where(eq(sourcesTable.id, id))
+      .returning();
+    if (!updated) {
       res.status(404).json({ error: "Source not found" });
       return;
     }
+
     const chunkRows = await db.execute(sql`
       SELECT count(*) AS chunk_count
       FROM source_chunks
@@ -343,64 +438,109 @@ router.patch("/sources/:id", async (req, res) => {
     const chunkCount = Number((chunkRows.rows[0] as Record<string, unknown> | undefined)?.chunk_count ?? 0);
     res.json(
       toSourceResponse({
-        id: source.id,
-        kind: source.kind,
-        title: source.title,
-        url: source.url,
-        parentPageId: source.parentPageId,
-        mediaPath: source.mediaPath,
-        mediaMimeType: source.mediaMimeType,
-        mediaSizeBytes: source.mediaSizeBytes,
-        summary: source.summary,
+        id: updated.id,
+        kind: updated.kind,
+        title: updated.title,
+        url: updated.url,
+        parentPageId: updated.parentPageId,
+        mediaPath: updated.mediaPath,
+        mediaMimeType: updated.mediaMimeType,
+        mediaSizeBytes: updated.mediaSizeBytes,
+        summary: updated.summary,
         chunkCount,
-        status: source.status,
-        createdAt: source.createdAt.toISOString(),
+        status: updated.status,
+        createdAt: updated.createdAt.toISOString(),
       }),
     );
     return;
   }
 
-  const [updated] = await db
-    .update(sourcesTable)
-    .set(updates)
-    .where(eq(sourcesTable.id, id))
-    .returning();
-  if (!updated) {
-    res.status(404).json({ error: "Source not found" });
+  // Not a source - try to find and update as a page (document)
+  const [page] = await db.select().from(pagesTable).where(and(eq(pagesTable.id, id), eq(pagesTable.kind, "page")));
+  
+  if (page) {
+    const updates: Record<string, unknown> = {};
+    if (body.title !== undefined) updates.title = body.title;
+    if (body.parentPageId !== undefined) updates.parentId = body.parentPageId;
+
+    if (Object.keys(updates).length === 0) {
+      res.json(
+        toSourceResponse({
+          id: page.id,
+          kind: "page",
+          title: page.title,
+          url: null,
+          parentPageId: page.parentId,
+          mediaPath: null,
+          mediaMimeType: null,
+          mediaSizeBytes: null,
+          summary: null,
+          chunkCount: 0,
+          status: "ready",
+          createdAt: page.createdAt.toISOString(),
+          isPage: true,
+        }),
+      );
+      return;
+    }
+
+    const [updated] = await db
+      .update(pagesTable)
+      .set(updates)
+      .where(eq(pagesTable.id, id))
+      .returning();
+    if (!updated) {
+      res.status(404).json({ error: "Page not found" });
+      return;
+    }
+
+    res.json(
+      toSourceResponse({
+        id: updated.id,
+        kind: "page",
+        title: updated.title,
+        url: null,
+        parentPageId: updated.parentId,
+        mediaPath: null,
+        mediaMimeType: null,
+        mediaSizeBytes: null,
+        summary: null,
+        chunkCount: 0,
+        status: "ready",
+        createdAt: updated.createdAt.toISOString(),
+        isPage: true,
+      }),
+    );
     return;
   }
 
-  const chunkRows = await db.execute(sql`
-    SELECT count(*) AS chunk_count
-    FROM source_chunks
-    WHERE source_id = ${id}
-  `);
-  const chunkCount = Number((chunkRows.rows[0] as Record<string, unknown> | undefined)?.chunk_count ?? 0);
-  res.json(
-    toSourceResponse({
-      id: updated.id,
-      kind: updated.kind,
-      title: updated.title,
-      url: updated.url,
-      parentPageId: updated.parentPageId,
-      mediaPath: updated.mediaPath,
-      mediaMimeType: updated.mediaMimeType,
-      mediaSizeBytes: updated.mediaSizeBytes,
-      summary: updated.summary,
-      chunkCount,
-      status: updated.status,
-      createdAt: updated.createdAt.toISOString(),
-    }),
-  );
+  res.status(404).json({ error: "Item not found" });
 });
 
 router.delete("/sources/:id", async (req, res) => {
   const { id } = DeleteSourceParams.parse(req.params);
+  
+  // Try to delete as a source first
   const [source] = await db.select().from(sourcesTable).where(eq(sourcesTable.id, id));
-  await db.delete(sourceChunksTable).where(eq(sourceChunksTable.sourceId, id));
-  await db.delete(sourcesTable).where(eq(sourcesTable.id, id));
-  await removeUploadedFile(source?.mediaPath);
-  res.status(204).end();
+  if (source) {
+    await db.delete(sourceChunksTable).where(eq(sourceChunksTable.sourceId, id));
+    await db.delete(sourcesTable).where(eq(sourcesTable.id, id));
+    await removeUploadedFile(source?.mediaPath);
+    res.status(204).end();
+    return;
+  }
+
+  // Try to delete as a page (document)
+  const [page] = await db.select().from(pagesTable).where(and(eq(pagesTable.id, id), eq(pagesTable.kind, "page")));
+  if (page) {
+    // Delete associated blocks first
+    await db.delete(blocksTable).where(eq(blocksTable.pageId, id));
+    await db.delete(pagesTable).where(eq(pagesTable.id, id));
+    res.status(204).end();
+    return;
+  }
+
+  res.status(404).json({ error: "Item not found" });
 });
 
 export default router;
