@@ -1,0 +1,1 @@
+export async function transcribeAudio(audioBuffer: Buffer, mediaPath: string, model: string): Promise<{ text: string; model: string }> { // TO DO: implement the transcribeAudio function }

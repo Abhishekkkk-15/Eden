@@ -1,7 +1,7 @@
 import { mkdir, writeFile, unlink, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { convertToWav, speechToText } from "@workspace/integrations-openai-ai-server/audio";
+import { transcribeAudio } from "@workspace/integrations-nvidia-nim-ai-server";
 import { describeImageDataUrl, summarize } from "./ai";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -48,7 +48,14 @@ export function extensionFromMimeType(mimeType: string): string {
     "video/quicktime": ".mov",
     "video/x-matroska": ".mkv",
     "audio/mpeg": ".mp3",
+    "audio/mp3": ".mp3",
     "audio/wav": ".wav",
+    "audio/ogg": ".ogg",
+    "audio/webm": ".webm",
+    "audio/mp4": ".m4a",
+    "audio/aac": ".aac",
+    "audio/flac": ".flac",
+    "audio/x-m4a": ".m4a",
   };
 
   return known[mimeType] ?? "";
@@ -154,8 +161,14 @@ export async function extractVideoContent(opts: {
   summary: string | null;
 }> {
   try {
-    const wavBuffer = await convertToWav(opts.buffer);
-    const content = (await speechToText(wavBuffer, "wav")).trim();
+    // Send the video/audio buffer directly to NVIDIA NIM Whisper.
+    // Whisper supports mp4, webm, mp3, wav, ogg, m4a natively — no ffmpeg needed.
+    const { text } = await transcribeAudio(
+      opts.buffer,
+      opts.originalFilename ?? undefined,
+      "whisper-large-v3",
+    );
+    const content = text.trim();
     if (!content) {
       return { content: "", summary: null };
     }
@@ -164,7 +177,8 @@ export async function extractVideoContent(opts: {
       content,
       summary: await summarize(content),
     };
-  } catch {
+  } catch (err) {
+    console.error("extractVideoContent failed:", err);
     const fallbackParts = [
       `Video source titled "${opts.title}".`,
       opts.originalFilename ? `Original filename: ${opts.originalFilename}.` : null,

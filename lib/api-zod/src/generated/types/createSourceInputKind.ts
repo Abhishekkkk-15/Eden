@@ -15,4 +15,5 @@ export const CreateSourceInputKind = {
   youtube: 'youtube',
   image: 'image',
   video: 'video',
+  audio: 'audio',
 } as const;

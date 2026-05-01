@@ -78,7 +78,7 @@ export function SourceCreateDialog({
 
     try {
       let fileDataUrl: string | undefined;
-      if (kind === "image" || kind === "video") {
+      if (kind === "image" || kind === "video" || kind === "audio") {
         if (!file) {
           toast.error("Select a file to upload");
           return;
@@ -133,6 +133,7 @@ export function SourceCreateDialog({
                 <SelectItem value="youtube">YouTube URL</SelectItem>
                 <SelectItem value="image">Image Upload</SelectItem>
                 <SelectItem value="video">Video Upload</SelectItem>
+                <SelectItem value="audio">Audio Upload</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -193,12 +194,14 @@ export function SourceCreateDialog({
             </div>
           )}
 
-          {(kind === "image" || kind === "video") && (
+          {(kind === "image" || kind === "video" || kind === "audio") && (
             <div className="space-y-2">
-              <Label>{kind === "image" ? "Image File" : "Video File"}</Label>
+              <Label>
+                {kind === "image" ? "Image File" : kind === "audio" ? "Audio File" : "Video File"}
+              </Label>
               <Input
                 type="file"
-                accept={kind === "image" ? "image/*" : "video/*"}
+                accept={kind === "image" ? "image/*" : kind === "audio" ? "audio/*" : "video/*"}
                 required
                 onChange={(e) => {
                   const nextFile = e.target.files?.[0] ?? null;
@@ -211,6 +214,8 @@ export function SourceCreateDialog({
               <p className="text-xs text-muted-foreground">
                 {kind === "image"
                   ? "Image files are stored as sources and indexed for search."
+                  : kind === "audio"
+                  ? "Audio files are transcribed using Whisper and indexed for search."
                   : "Video files are stored as sources and transcribed when supported by the backend."}
               </p>
             </div>

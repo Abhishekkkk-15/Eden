@@ -161,7 +161,7 @@ router.post("/sources", async (req, res) => {
       }
     | undefined;
 
-  if (body.kind === "image" || body.kind === "video") {
+  if (body.kind === "image" || body.kind === "video" || body.kind === "audio") {
     if (!body.fileDataUrl) {
       res.status(400).json({ error: "fileDataUrl is required for uploaded media" });
       return;
@@ -173,8 +173,10 @@ router.post("/sources", async (req, res) => {
       body.kind === "image" && uploaded.mimeType.startsWith("image/");
     const isValidVideo =
       body.kind === "video" && uploaded.mimeType.startsWith("video/");
+    const isValidAudio =
+      body.kind === "audio" && uploaded.mimeType.startsWith("audio/");
 
-    if (!isValidImage && !isValidVideo) {
+    if (!isValidImage && !isValidVideo && !isValidAudio) {
       res.status(400).json({ error: "Uploaded file type does not match source kind" });
       return;
     }
@@ -244,6 +246,7 @@ router.post("/sources", async (req, res) => {
       let transcription: string | null = null;
 
       // Run transcription for media files in parallel with other processing
+      // (image, video, audio all get a dedicated transcriptions table row)
       if (["video", "audio", "image"].includes(body.kind)) {
         void (async () => {
           try {
@@ -267,8 +270,8 @@ router.post("/sources", async (req, res) => {
           originalFilename: body.originalFilename,
         });
         content = extracted.content;
-      } else if (body.kind === "video") {
-        if (!uploaded) throw new Error("Video upload payload missing");
+      } else if (body.kind === "video" || body.kind === "audio") {
+        if (!uploaded) throw new Error("Media upload payload missing");
         const extracted = await extractVideoContent({
           buffer: uploaded.buffer,
           title: body.title,

@@ -171,7 +171,7 @@ export const ReorderBlocksResponse = zod.array(ReorderBlocksResponseItem)
  */
 export const ListSourcesResponseItem = zod.object({
   "id": zod.number(),
-  "kind": zod.enum(['text', 'url', 'youtube', 'image', 'video']),
+  "kind": zod.enum(['text', 'url', 'youtube', 'image', 'video', 'audio']),
   "title": zod.string(),
   "url": zod.string().nullable(),
   "parentPageId": zod.number().nullable(),
@@ -191,7 +191,7 @@ export const ListSourcesResponse = zod.array(ListSourcesResponseItem)
  * @summary Create a source from text, URL, YouTube, image, or video
  */
 export const CreateSourceBody = zod.object({
-  "kind": zod.enum(['text', 'url', 'youtube', 'image', 'video']),
+  "kind": zod.enum(['text', 'url', 'youtube', 'image', 'video', 'audio']),
   "title": zod.string(),
   "content": zod.string().nullish(),
   "url": zod.string().nullish(),
@@ -208,7 +208,7 @@ export const GetSourceParams = zod.object({
 
 export const GetSourceResponse = zod.object({
   "id": zod.number(),
-  "kind": zod.enum(['text', 'url', 'youtube', 'image', 'video']),
+  "kind": zod.enum(['text', 'url', 'youtube', 'image', 'video', 'audio']),
   "title": zod.string(),
   "url": zod.string().nullable(),
   "parentPageId": zod.number().nullable(),
@@ -242,7 +242,7 @@ export const UpdateSourceBody = zod.object({
 
 export const UpdateSourceResponse = zod.object({
   "id": zod.number(),
-  "kind": zod.enum(['text', 'url', 'youtube', 'image', 'video']),
+  "kind": zod.enum(['text', 'url', 'youtube', 'image', 'video', 'audio']),
   "title": zod.string(),
   "url": zod.string().nullable(),
   "parentPageId": zod.number().nullable(),
