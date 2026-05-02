@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import {
   getListPagesQueryKey,
   getListSourcesQueryKey,
@@ -602,12 +602,14 @@ export default function SourcesList() {
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dropTargetId, setDropTargetId] = useState<number | null>(null);
 
-  const folderId = useMemo(() => {
+  const [folderId, setFolderId] = useState<number | null>(null);
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const raw = params.get("folder");
     const parsed = raw ? Number(raw) : null;
-    return parsed && Number.isFinite(parsed) ? parsed : null;
-  }, [location]);
+    setFolderId(parsed && Number.isFinite(parsed) ? parsed : null);
+  }, [location]); // Re-run when route changes
 
   const sourceList = Array.isArray(sources) ? sources : [];
   const folderPages =

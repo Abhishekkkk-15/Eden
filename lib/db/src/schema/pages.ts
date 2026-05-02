@@ -1,9 +1,11 @@
 import { pgTable, serial, text, integer, timestamp, index } from "drizzle-orm/pg-core";
+import { usersTable } from "./auth";
 
 export const pagesTable = pgTable(
   "pages",
   {
     id: serial("id").primaryKey(),
+    userId: text("user_id").references(() => usersTable.id),
     kind: text("kind").notNull().default("page"),
     title: text("title").notNull(),
     emoji: text("emoji"),

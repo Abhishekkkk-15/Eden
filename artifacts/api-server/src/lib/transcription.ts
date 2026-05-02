@@ -3,21 +3,19 @@ import { eq, ilike } from "drizzle-orm";
 import {
   transcribeAudio,
 } from "@workspace/integrations-groq-ai-server";
-import { readFile } from "fs/promises";
-import { join } from "path";
-import { getUploadsDir } from "./source-media";
 import { chunkText } from "./rag";
 
 /**
  * Transcribe audio or video file using Groq Whisper
  */
-export async function transcribeAudioVideo(sourceId: number, mediaPath: string): Promise<string> {
+export async function transcribeAudioVideo(sourceId: number, mediaUrl: string): Promise<string> {
   try {
-    const fullPath = join(getUploadsDir(), mediaPath);
-    const audioBuffer = await readFile(fullPath);
+    const response = await fetch(mediaUrl);
+    if (!response.ok) throw new Error(`Failed to fetch media from ${mediaUrl}: ${response.statusText}`);
+    const audioBuffer = Buffer.from(await response.arrayBuffer());
     
     // Transcribe using Groq (whisper-large-v3)
-    const { text: transcription, model } = await transcribeAudio(audioBuffer, mediaPath);
+    const { text: transcription, model } = await transcribeAudio(audioBuffer, mediaUrl);
     
     // Store in database
     await db.insert(transcriptionsTable).values({

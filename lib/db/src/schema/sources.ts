@@ -1,7 +1,9 @@
 import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { usersTable } from "./auth";
 
 export const sourcesTable = pgTable("sources", {
   id: serial("id").primaryKey(),
+  userId: text("user_id").references(() => usersTable.id),
   kind: text("kind").notNull(),
   title: text("title").notNull(),
   url: text("url"),

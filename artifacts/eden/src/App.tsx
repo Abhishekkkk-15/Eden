@@ -1,8 +1,11 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
+import { useEffect, useState } from "react";
+import { setAuthTokenGetter } from "@workspace/api-client-react";
+
 import NotFound from "@/pages/not-found";
 import { AppLayout } from "@/components/layout/app-layout";
 import Home from "@/pages/home";
@@ -14,25 +17,53 @@ import ChatList from "@/pages/chat/index";
 import ChatDetail from "@/pages/chat/[id]";
 import AgentsList from "@/pages/agents/index";
 import AgentDetail from "@/pages/agents/[id]";
+import LoginPage from "@/pages/login";
+import SignupPage from "@/pages/signup";
 
 const queryClient = new QueryClient();
 
+// Configure API client to use token from localStorage
+setAuthTokenGetter(() => localStorage.getItem("token"));
+
 function Router() {
+  const [location, setLocation] = useLocation();
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const isAuthPage = location === "/login" || location === "/signup";
+    
+    if (!token && !isAuthPage) {
+      setLocation("/login");
+    } else if (token && isAuthPage) {
+      setLocation("/");
+    }
+    setIsAuthChecking(false);
+  }, [location, setLocation]);
+
+  if (isAuthChecking) return null;
+
   return (
-    <AppLayout>
-      <Switch>
-        <Route path="/" component={Home} />
-        <Route path="/pages/:id" component={PageEditor} />
-        <Route path="/sources" component={SourcesList} />
-        <Route path="/sources/:id" component={SourceDetail} />
-        <Route path="/search" component={Search} />
-        <Route path="/chat" component={ChatList} />
-        <Route path="/chat/:id" component={ChatDetail} />
-        <Route path="/agents" component={AgentsList} />
-        <Route path="/agents/:id" component={AgentDetail} />
-        <Route component={NotFound} />
-      </Switch>
-    </AppLayout>
+    <Switch>
+      <Route path="/login" component={LoginPage} />
+      <Route path="/signup" component={SignupPage} />
+      <Route>
+        <AppLayout>
+          <Switch>
+            <Route path="/" component={Home} />
+            <Route path="/pages/:id" component={PageEditor} />
+            <Route path="/sources" component={SourcesList} />
+            <Route path="/sources/:id" component={SourceDetail} />
+            <Route path="/search" component={Search} />
+            <Route path="/chat" component={ChatList} />
+            <Route path="/chat/:id" component={ChatDetail} />
+            <Route path="/agents" component={AgentsList} />
+            <Route path="/agents/:id" component={AgentDetail} />
+            <Route component={NotFound} />
+          </Switch>
+        </AppLayout>
+      </Route>
+    </Switch>
   );
 }
 

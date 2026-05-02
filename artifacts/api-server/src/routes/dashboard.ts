@@ -7,20 +7,23 @@ import {
   conversationsTable,
   messagesTable,
 } from "@workspace/db";
-import { sql, desc } from "drizzle-orm";
+import { sql, desc, eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-router.get("/dashboard/summary", async (_req, res) => {
+router.get("/dashboard/summary", async (req, res) => {
+  const user = (req as any).user;
   const [pageRow] = await db
     .select({ c: sql<number>`count(*)::int` })
-    .from(pagesTable);
+    .from(pagesTable)
+    .where(eq(pagesTable.userId, user.id));
   const [sourceRow] = await db
     .select({ c: sql<number>`count(*)::int` })
-    .from(sourcesTable);
+    .from(sourcesTable)
+    .where(eq(sourcesTable.userId, user.id));
   const [agentRow] = await db
     .select({ c: sql<number>`count(*)::int` })
-    .from(agentsTable);
+    .from(agentsTable); // Agents are global for now or need userId too
   const [convRow] = await db
     .select({ c: sql<number>`count(*)::int` })
     .from(conversationsTable);

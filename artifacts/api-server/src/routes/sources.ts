@@ -13,6 +13,7 @@ import { summarize } from "../lib/ai";
 import {
   extractImageContent,
   extractVideoContent,
+  extractYouTubeContent,
   getMediaUrl,
   getYouTubeEmbedUrl,
   parseDataUrl,
@@ -20,6 +21,7 @@ import {
   removeUploadedFile,
 } from "../lib/source-media";
 import { transcribeSource } from "../lib/transcription";
+import { NodeHtmlMarkdown } from "node-html-markdown";
 
 const router: IRouter = Router();
 
@@ -67,23 +69,12 @@ async function fetchUrl(url: string): Promise<string> {
     throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
   }
   const html = await response.text();
-  const text = html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/\s+/g, " ")
-    .trim();
-  return text.slice(0, 50000);
+  const markdown = NodeHtmlMarkdown.translate(html);
+  return markdown.slice(0, 100000);
 }
 
-router.get("/sources", async (_req, res) => {
+router.get("/sources", async (req, res) => {
+  const user = (req as any).user;
   // Union query to get both sources and pages (documents) in one list
   const rows = await db.execute(sql`
     SELECT 
@@ -96,6 +87,7 @@ router.get("/sources", async (_req, res) => {
         (SELECT count(*) FROM source_chunks c WHERE c.source_id = s.id) AS chunk_count,
         false as is_page
       FROM sources s
+      WHERE s.user_id = ${user.id}
       UNION ALL
       SELECT 
         p.id, 'page' as kind, p.title, null as url, p.parent_id as parent_page_id, 
@@ -104,7 +96,7 @@ router.get("/sources", async (_req, res) => {
         0 as chunk_count,
         true as is_page
       FROM pages p
-      WHERE p.kind = 'page'
+      WHERE p.kind = 'page' AND p.user_id = ${user.id}
     ) combined
     ORDER BY created_at DESC
   `);
@@ -182,9 +174,11 @@ router.post("/sources", async (req, res) => {
     }
   }
 
+  const user = (req as any).user;
   const [pending] = await db
     .insert(sourcesTable)
     .values({
+      userId: user.id,
       kind: body.kind,
       title: body.title,
       url: body.url ?? null,
@@ -258,9 +252,13 @@ router.post("/sources", async (req, res) => {
         })();
       }
 
-      if (body.kind === "url" || body.kind === "youtube") {
+      if (body.kind === "url") {
         if (!body.url) throw new Error("URL is required for URL-based sources");
         content = await fetchUrl(body.url);
+      } else if (body.kind === "youtube") {
+        if (!body.url) throw new Error("URL is required for YouTube sources");
+        const extracted = await extractYouTubeContent(body.url);
+        content = extracted.content;
       } else if (body.kind === "image") {
         const imageDataUrl = body.fileDataUrl;
         if (!imageDataUrl) throw new Error("Image upload payload missing");

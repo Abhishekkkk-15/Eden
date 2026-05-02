@@ -10,6 +10,7 @@ import {
   FileText,
   PanelLeftClose,
   PanelLeftOpen,
+  LogOut,
 } from "lucide-react";
 import { useListPages, useCreatePage, getListPagesQueryKey } from "@workspace/api-client-react";
 import { CommandPalette } from "../command-palette";
@@ -36,6 +37,11 @@ export function AppLayout({ children }: AppLayoutProps) {
         setLocation(`/pages/${p.id}`);
       }
     });
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    window.location.href = "/login";
   };
 
   const navItems = [
@@ -71,32 +77,22 @@ export function AppLayout({ children }: AppLayoutProps) {
             ))}
           </div>
 
-          <div className="px-3">
-            <div className="flex items-center justify-between px-2 py-1 group">
-              <span className="text-xs font-semibold text-sidebar-foreground/60 uppercase tracking-wider">Pages</span>
-              <button onClick={handleNewPage} className="text-sidebar-foreground/50 hover:text-sidebar-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="mt-1 space-y-0.5">
-              {pageList.map((p) => (
-                <Link key={p.id} href={`/pages/${p.id}`}>
-                  <div className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm cursor-pointer transition-colors ${location === `/pages/${p.id}` ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}>
-                    <FileText className="w-4 h-4 opacity-50" />
-                    <span className="truncate">{p.emoji ? `${p.emoji} ` : ''}{p.title}</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
         </div>
 
-        <div className="p-4 border-t border-sidebar-border text-xs text-sidebar-foreground/50">
-          <div className="flex items-center gap-2 justify-center">
+        <div className="p-4 border-t border-sidebar-border space-y-4">
+          <div className="flex items-center gap-2 justify-center text-xs text-sidebar-foreground/50">
             <kbd className="bg-sidebar-accent px-1.5 py-0.5 rounded border border-sidebar-border shadow-sm">⌘</kbd>
             <kbd className="bg-sidebar-accent px-1.5 py-0.5 rounded border border-sidebar-border shadow-sm">K</kbd>
             <span>to search</span>
           </div>
+          
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-2 py-1.5 rounded-md text-sm text-red-500 hover:bg-red-500/10 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Logout</span>
+          </button>
         </div>
       </div>
 
