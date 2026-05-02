@@ -690,8 +690,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Citation"
+        contextItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatContextItem"
         createdAt: { type: string, format: date-time }
-      required: [id, conversationId, role, content, citations, createdAt]
+      required: [id, conversationId, role, content, citations, contextItems, createdAt]
 
     Citation:
       type: object
@@ -711,10 +715,27 @@ components:
         agentId: { type: ["integer", "null"] }
       required: [title]
 
+    ChatContextItem:
+      type: object
+      description: Optional workspace item to scope the reply (file, document, or folder).
+      properties:
+        type:
+          type: string
+          enum: [source, page, folder]
+        id: { type: integer }
+        title: { type: string }
+      required: [type, id]
+
     SendMessageInput:
       type: object
       properties:
         content: { type: string }
+        contextItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatContextItem"
+          description: >-
+            When set, the model prioritizes these items (your files/folders). Drag them from Sources into chat.
       required: [content]
 
     Agent:

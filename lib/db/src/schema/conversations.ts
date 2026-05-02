@@ -20,11 +20,18 @@ export type Citation = {
   snippet: string;
 };
 
+export type ChatContextItem = {
+  type: "source" | "page" | "folder";
+  id: number;
+  title?: string;
+};
+
 export const messagesTable = pgTable("messages", {
   id: serial("id").primaryKey(),
   conversationId: integer("conversation_id").notNull(),
   role: text("role").notNull(),
   content: text("content").notNull(),
+  contextItems: jsonb("context_items").$type<ChatContextItem[]>().notNull().default([]),
   citations: jsonb("citations").$type<Citation[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

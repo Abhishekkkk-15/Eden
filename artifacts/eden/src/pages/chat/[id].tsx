@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -8,12 +8,21 @@ import {
   getListConversationsQueryKey,
   getGetRecentActivityQueryKey,
   getGetDashboardSummaryQueryKey,
+  type ChatContextItem,
   type Citation,
   type Message,
 } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { ChatWorkspacePicker } from "@/components/chat/chat-workspace-picker";
+import {
+  attachmentFromContextItem,
+  attachmentFromDrag,
+  parseWorkspaceDragJson,
+  type ChatAttachment,
+} from "@/lib/workspace-chat-bridge";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -23,7 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Send, FileText, Database, Sparkles, FolderOpen, Trash2 } from "lucide-react";
+import { Send, FileText, Database, Sparkles, FolderOpen, Trash2, Paperclip, X } from "lucide-react";
 import { toast } from "sonner";
 
 function chatPostHeaders(): HeadersInit {
@@ -36,6 +45,7 @@ function chatPostHeaders(): HeadersInit {
 interface PendingMessage {
   role: "user" | "assistant";
   content: string;
+  contextItems: ChatContextItem[];
   citations: Citation[];
 }
 
@@ -49,14 +59,38 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
   const [streaming, setStreaming] = useState(false);
   const [pending, setPending] = useState<PendingMessage[]>([]);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [composerDragOver, setComposerDragOver] = useState(false);
   const [, navigate] = useLocation();
   const scrollerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const attachmentKeys = useMemo(() => new Set(attachments.map((a) => a.key)), [attachments]);
+
+  const addAttachment = useCallback((a: ChatAttachment) => {
+    setAttachments((prev) => (prev.some((x) => x.key === a.key) ? prev : [...prev, a]));
+  }, []);
+
+  const removeAttachment = useCallback((key: string) => {
+    setAttachments((prev) => prev.filter((x) => x.key !== key));
+  }, []);
 
   const messages = useMemo<(Message | PendingMessage)[]>(() => {
     const persisted = conversation?.messages ?? [];
     return [...persisted, ...pending];
   }, [conversation?.messages, pending]);
+
+  useEffect(() => {
+    const persisted = conversation?.messages ?? [];
+    for (let i = persisted.length - 1; i >= 0; i--) {
+      const msg = persisted[i]!;
+      if (msg.role !== "user" || !msg.contextItems || msg.contextItems.length === 0) continue;
+      setAttachments(msg.contextItems.map((item) => attachmentFromContextItem(item)));
+      return;
+    }
+    setAttachments([]);
+  }, [conversation?.id, conversation?.messages]);
 
   useEffect(() => {
     if (scrollerRef.current) {
@@ -70,9 +104,15 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
 
     setInput("");
     setStreaming(true);
+    const contextPayload = attachments.map((a) => ({ type: a.apiType, id: a.id }));
     setPending([
-      { role: "user", content, citations: [] },
-      { role: "assistant", content: "", citations: [] },
+      {
+        role: "user",
+        content,
+        contextItems: attachments.map((a) => ({ type: a.apiType, id: a.id, title: a.title })),
+        citations: [],
+      },
+      { role: "assistant", content: "", contextItems: [], citations: [] },
     ]);
 
     try {
@@ -80,7 +120,18 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
       const res = await fetch(url, {
         method: "POST",
         headers: chatPostHeaders(),
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({
+          content,
+          ...(contextPayload.length > 0 ?
+            {
+              contextItems: attachments.map((a) => ({
+                type: a.apiType,
+                id: a.id,
+                title: a.title,
+              })),
+            }
+          : {}),
+        }),
       });
       if (res.status === 401) {
         toast.error("Session expired — sign in again.");
@@ -211,6 +262,16 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
             <h1 className="text-lg font-semibold tracking-tight mt-1 truncate">
               {conversation.title}
             </h1>
+            {attachments.length > 0 ?
+              <p className="mt-1 text-xs text-muted-foreground">
+                {attachments.length} workspace item{attachments.length === 1 ? "" : "s"} pinned for
+                your next message — drop more from{" "}
+                <Link href="/sources" className="underline hover:text-foreground">
+                  Sources
+                </Link>{" "}
+                or use Add.
+              </p>
+            : null}
           </div>
           <Button
             type="button"
@@ -230,8 +291,12 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
             <div className="text-center py-16 text-muted-foreground">
               <Sparkles className="mx-auto h-8 w-8 mb-3 opacity-60" />
               <p className="text-sm">Ask anything about your workspace.</p>
-              <p className="text-xs mt-1 opacity-70">
-                Each reply searches your pages and files, then shows what was used below the answer.
+              <p className="text-xs mt-1 opacity-70 max-w-sm mx-auto">
+                Drag folders or files from{" "}
+                <Link href="/sources" className="underline hover:text-foreground">
+                  My Drive
+                </Link>{" "}
+                into the box below, or use Add — then ask for summaries, plans, or next steps.
               </p>
             </div>
           )}
@@ -241,6 +306,7 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
               key={`${("id" in m && m.id) || "p"}-${i}`}
               role={m.role}
               content={m.content}
+              contextItems={m.contextItems ?? []}
               citations={m.citations ?? []}
               onCitationClick={handleCitationClick}
               isStreaming={
@@ -255,36 +321,118 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
 
       <div className="border-t border-border bg-background/80 backdrop-blur">
         <div className="max-w-3xl mx-auto px-6 py-4">
-          <div className="flex gap-2 items-end">
-            <Textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void handleSend();
+          <div
+            className={`rounded-xl border bg-card/40 p-3 transition-colors ${
+              composerDragOver ? "border-primary ring-2 ring-primary/20" : "border-border/80"
+            }`}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              setComposerDragOver(true);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+              setComposerDragOver(true);
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                setComposerDragOver(false);
+              }
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setComposerDragOver(false);
+              const raw = e.dataTransfer.getData("application/json");
+              const p = parseWorkspaceDragJson(raw);
+              if (!p) {
+                toast.error("Drop items from Sources (My Drive) — folders, documents, or files.");
+                return;
+              }
+              addAttachment(attachmentFromDrag(p));
+              toast.success("Added to chat context");
+            }}>
+            {attachments.length > 0 ?
+              <div className="mb-3 flex flex-wrap gap-2">
+                {attachments.map((a) => (
+                  <Badge
+                    key={a.key}
+                    variant="secondary"
+                    className="gap-1 pr-1 font-normal max-w-[220px]">
+                    <span className="truncate">
+                      {a.apiType === "folder" ?
+                        <FolderOpen className="inline h-3 w-3 mr-1 align-text-bottom" />
+                      : a.apiType === "page" ?
+                        <FileText className="inline h-3 w-3 mr-1 align-text-bottom" />
+                      : <Database className="inline h-3 w-3 mr-1 align-text-bottom" />}
+                      {a.title}
+                    </span>
+                    <button
+                      type="button"
+                      className="ml-0.5 rounded-sm p-0.5 hover:bg-background/80"
+                      aria-label={`Remove ${a.title}`}
+                      onClick={() => removeAttachment(a.key)}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            : null}
+            <div className="flex gap-2 items-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-11 w-11 shrink-0"
+                disabled={streaming}
+                aria-label="Add workspace items"
+                onClick={() => setPickerOpen(true)}>
+                <Paperclip className="h-4 w-4" />
+              </Button>
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleSend();
+                  }
+                }}
+                placeholder={
+                  attachments.length ?
+                    "Ask for a summary, plan, risks, timeline…"
+                  : "Ask Eden anything…"
                 }
-              }}
-              placeholder="Ask Eden anything…"
-              rows={1}
-              className="resize-none min-h-[44px] max-h-40"
-              disabled={streaming}
-            />
-            <Button
-              onClick={() => void handleSend()}
-              disabled={streaming || !input.trim()}
-              size="icon"
-              className="h-11 w-11"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
+                rows={1}
+                className="resize-none min-h-[44px] max-h-40 flex-1"
+                disabled={streaming}
+              />
+              <Button
+                onClick={() => void handleSend()}
+                disabled={streaming || !input.trim()}
+                size="icon"
+                className="h-11 w-11 shrink-0"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              {composerDragOver ?
+                "Drop folder or file here…"
+              : streaming ?
+                "Eden is thinking…"
+              : "Press Enter to send. Drag from My Drive or use the clip to attach."}
+            </p>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-2">
-            {streaming ? "Eden is thinking…" : "Press Enter to send, Shift+Enter for newline."}
-          </p>
         </div>
       </div>
+
+      <ChatWorkspacePicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onPick={addAttachment}
+        existingKeys={attachmentKeys}
+      />
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
@@ -367,12 +515,14 @@ function CitationReferences({
 function MessageBubble({
   role,
   content,
+  contextItems,
   citations,
   onCitationClick,
   isStreaming,
 }: {
   role: "user" | "assistant" | "system";
   content: string;
+  contextItems: ChatContextItem[];
   citations: Citation[];
   onCitationClick: (c: Citation) => void;
   isStreaming: boolean;
@@ -398,6 +548,20 @@ function MessageBubble({
             <span className="text-muted-foreground italic">empty</span>
           )}
         </div>
+        {isUser && contextItems.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 max-w-[95%]">
+            {contextItems.map((ctx, i) => (
+              <Badge key={`${ctx.type}-${ctx.id}-${i}`} variant="secondary" className="font-normal">
+                {ctx.type === "folder" ?
+                  <FolderOpen className="h-3 w-3 mr-1" />
+                : ctx.type === "page" ?
+                  <FileText className="h-3 w-3 mr-1" />
+                : <Database className="h-3 w-3 mr-1" />}
+                {ctx.title || `${ctx.type} #${ctx.id}`}
+              </Badge>
+            ))}
+          </div>
+        )}
         {!isUser && citations.length > 0 && (
           <CitationReferences citations={citations} onCitationClick={onCitationClick} />
         )}

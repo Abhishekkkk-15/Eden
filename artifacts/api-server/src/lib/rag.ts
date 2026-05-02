@@ -1,5 +1,5 @@
 import { db, pagesTable, blocksTable, sourcesTable, sourceChunksTable } from "@workspace/db";
-import { sql, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Citation } from "@workspace/db";
 
 export type RagHit = {
@@ -13,6 +13,57 @@ export type RagHit = {
 };
 
 type TsMode = "websearch" | "plain";
+
+/** Folders have no blocks; chat RAG needs an inventory so the model can answer questions about drive structure. */
+async function buildFolderInventoryText(
+  folderId: number,
+  userId: string,
+  folderTitle: string,
+): Promise<string> {
+  const children = await db
+    .select()
+    .from(pagesTable)
+    .where(and(eq(pagesTable.parentId, folderId), eq(pagesTable.userId, userId)))
+    .orderBy(asc(pagesTable.position), asc(pagesTable.id));
+
+  const subfolders = children.filter((p) => p.kind === "folder");
+  const docs = children.filter((p) => p.kind === "page");
+
+  const childSources = await db
+    .select()
+    .from(sourcesTable)
+    .where(and(eq(sourcesTable.parentPageId, folderId), eq(sourcesTable.userId, userId)))
+    .orderBy(asc(sourcesTable.createdAt), asc(sourcesTable.id));
+
+  const lines: string[] = [`Folder "${folderTitle}" contains:`];
+
+  for (const f of subfolders) {
+    lines.push(`- Subfolder: ${f.emoji ? `${f.emoji} ` : ""}${f.title}`);
+  }
+  for (const d of docs) {
+    lines.push(`- Document: ${d.title}`);
+  }
+
+  const maxFiles = 20;
+  for (let i = 0; i < childSources.length; i++) {
+    if (i >= maxFiles) {
+      lines.push(`- … and ${childSources.length - maxFiles} more file(s) in this folder`);
+      break;
+    }
+    const s = childSources[i]!;
+    const excerpt = (s.summary || s.content || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 320);
+    lines.push(`- File: ${s.title} (${s.kind})${excerpt ? ` — ${excerpt}` : ""}`);
+  }
+
+  if (lines.length === 1) {
+    return `Folder "${folderTitle}" is empty (no subfolders, documents, or files).`;
+  }
+
+  return lines.join("\n");
+}
 
 function tsQueryFragment(q: string, mode: TsMode) {
   return mode === "websearch" ?
@@ -30,11 +81,12 @@ async function searchWorkspaceWithMode(
 
   const pageRows = await db.execute(sql`
     SELECT p.id, p.title,
-           ts_rank(to_tsvector('english', p.title), ${tsq}) AS score,
-           ts_headline('english', p.title, ${tsq},
+           ts_rank(to_tsvector('english', coalesce(p.emoji, '') || ' ' || p.title), ${tsq}) AS score,
+           ts_headline('english', coalesce(p.emoji, '') || ' ' || p.title, ${tsq},
              'StartSel=, StopSel=, MaxFragments=1, MaxWords=18, MinWords=4') AS snippet
     FROM pages p
-    WHERE p.user_id = ${userId} AND to_tsvector('english', p.title) @@ ${tsq}
+    WHERE p.user_id = ${userId}
+      AND to_tsvector('english', coalesce(p.emoji, '') || ' ' || p.title) @@ ${tsq}
     ORDER BY score DESC
     LIMIT ${limit}
   `);
@@ -157,12 +209,18 @@ export async function buildRagContext(userId: string, query: string): Promise<{
         .where(eq(sourceChunksTable.id, hit.refId));
       if (chunk) text = chunk.content;
     } else if (hit.kind === "page" && hit.refId) {
-      const blockList = await db
-        .select()
-        .from(blocksTable)
-        .where(eq(blocksTable.pageId, hit.refId))
-        .limit(20);
-      text = blockList.map((b) => b.content).filter(Boolean).join("\n");
+      const [page] = await db.select().from(pagesTable).where(eq(pagesTable.id, hit.refId));
+      if (!page) continue;
+      if (page.kind === "folder") {
+        text = await buildFolderInventoryText(hit.refId, userId, page.title);
+      } else {
+        const blockList = await db
+          .select()
+          .from(blocksTable)
+          .where(eq(blocksTable.pageId, hit.refId))
+          .limit(20);
+        text = blockList.map((b) => b.content).filter(Boolean).join("\n");
+      }
     } else if (hit.kind === "source" && hit.refId) {
       const [source] = await db.select().from(sourcesTable).where(eq(sourcesTable.id, hit.refId));
       if (source) text = source.summary || source.content.slice(0, 1200);
@@ -191,6 +249,109 @@ export async function buildRagContext(userId: string, query: string): Promise<{
   return {
     contextText: blocks.join("\n\n---\n\n"),
     citations: Array.from(citationMap.values()).slice(0, 10),
+  };
+}
+
+export type ChatContextItem = { type: "source" | "page" | "folder"; id: number };
+
+function clipContextText(text: string, max: number): string {
+  const t = text.trim();
+  if (!t) return "";
+  return t.length <= max ? t : `${t.slice(0, max)}\n…(truncated)`;
+}
+
+/**
+ * Load full text for user-selected sources, documents, or folders (chat attachments).
+ * All rows are scoped with userId.
+ */
+export async function buildContextFromSelection(
+  userId: string,
+  items: ChatContextItem[],
+): Promise<{ contextText: string; citations: Citation[] }> {
+  if (!items?.length) return { contextText: "", citations: [] };
+
+  const seen = new Set<string>();
+  const deduped: ChatContextItem[] = [];
+  for (const it of items) {
+    const k = `${it.type}:${it.id}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    deduped.push(it);
+  }
+
+  const blocks: string[] = [];
+  const citationMap = new Map<string, Citation>();
+
+  for (const item of deduped) {
+    if (item.type === "source") {
+      const [s] = await db
+        .select()
+        .from(sourcesTable)
+        .where(and(eq(sourcesTable.id, item.id), eq(sourcesTable.userId, userId)));
+      if (!s) continue;
+      const chunks = await db
+        .select()
+        .from(sourceChunksTable)
+        .where(eq(sourceChunksTable.sourceId, item.id))
+        .orderBy(asc(sourceChunksTable.position))
+        .limit(48);
+      let text =
+        chunks.length > 0 ?
+          chunks.map((c) => c.content).join("\n\n")
+        : (s.summary || s.content || "");
+      text = clipContextText(text, 14_000);
+      if (!text) continue;
+      citationMap.set(`source:${s.id}`, {
+        kind: "source",
+        refId: s.id,
+        title: s.title,
+        snippet: (s.summary || text).slice(0, 200),
+      });
+      blocks.push(`[Attached file: "${s.title}" (${s.kind})]\n${text}`);
+    } else if (item.type === "page") {
+      const [p] = await db
+        .select()
+        .from(pagesTable)
+        .where(and(eq(pagesTable.id, item.id), eq(pagesTable.userId, userId)));
+      if (!p || p.kind !== "page") continue;
+      const blockList = await db
+        .select()
+        .from(blocksTable)
+        .where(eq(blocksTable.pageId, item.id))
+        .orderBy(asc(blocksTable.position), asc(blocksTable.id));
+      const text = clipContextText(
+        blockList.map((b) => b.content).filter(Boolean).join("\n"),
+        14_000,
+      );
+      if (!text) continue;
+      citationMap.set(`page:${p.id}`, {
+        kind: "page",
+        refId: p.id,
+        title: p.title,
+        snippet: text.slice(0, 200),
+      });
+      blocks.push(`[Attached document: "${p.title}"]\n${text}`);
+    } else if (item.type === "folder") {
+      const [p] = await db
+        .select()
+        .from(pagesTable)
+        .where(and(eq(pagesTable.id, item.id), eq(pagesTable.userId, userId)));
+      if (!p || p.kind !== "folder") continue;
+      const inv = await buildFolderInventoryText(item.id, userId, p.title);
+      const expanded = clipContextText(inv, 16_000);
+      citationMap.set(`page:${p.id}`, {
+        kind: "page",
+        refId: p.id,
+        title: p.title,
+        snippet: expanded.slice(0, 200),
+      });
+      blocks.push(`[Attached folder: "${p.title}"]\n${expanded}`);
+    }
+  }
+
+  return {
+    contextText: blocks.join("\n\n---\n\n"),
+    citations: Array.from(citationMap.values()),
   };
 }
 

@@ -15,4 +15,5 @@ export const SourceKind = {
   youtube: 'youtube',
   image: 'image',
   video: 'video',
+  audio: 'audio',
 } as const;

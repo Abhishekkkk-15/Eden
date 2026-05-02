@@ -5,7 +5,10 @@
  * Eden AI Workspace API
  * OpenAPI spec version: 0.1.0
  */
+import type { ChatContextItem } from './chatContextItem';
 
 export interface SendMessageInput {
   content: string;
+  /** When set, the model prioritizes these items (your files/folders). Drag them from Sources into chat. */
+  contextItems?: ChatContextItem[];
 }

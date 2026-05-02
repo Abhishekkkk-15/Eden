@@ -167,7 +167,7 @@ export const ReorderBlocksResponse = zod.array(ReorderBlocksResponseItem)
 
 
 /**
- * @summary List text, URL, YouTube, image, and video sources
+ * @summary List text, URL, YouTube, image, video, and audio sources
  */
 export const ListSourcesResponseItem = zod.object({
   "id": zod.number(),
@@ -188,7 +188,7 @@ export const ListSourcesResponse = zod.array(ListSourcesResponseItem)
 
 
 /**
- * @summary Create a source from text, URL, YouTube, image, or video
+ * @summary Create a source from text, URL, YouTube, image, video, or audio
  */
 export const CreateSourceBody = zod.object({
   "kind": zod.enum(['text', 'url', 'youtube', 'image', 'video', 'audio']),
@@ -321,6 +321,11 @@ export const GetConversationResponse = zod.object({
   "title": zod.string(),
   "snippet": zod.string()
 })),
+  "contextItems": zod.array(zod.object({
+  "type": zod.enum(['source', 'page', 'folder']),
+  "id": zod.number(),
+  "title": zod.string().optional()
+}).describe('Optional workspace item to scope the reply (file, document, or folder).')),
   "createdAt": zod.coerce.date()
 }))
 }))
@@ -339,7 +344,12 @@ export const SendMessageParams = zod.object({
 })
 
 export const SendMessageBody = zod.object({
-  "content": zod.string()
+  "content": zod.string(),
+  "contextItems": zod.array(zod.object({
+  "type": zod.enum(['source', 'page', 'folder']),
+  "id": zod.number(),
+  "title": zod.string().optional()
+}).describe('Optional workspace item to scope the reply (file, document, or folder).')).optional().describe('When set, the model prioritizes these items (your files\/folders). Drag them from Sources into chat.')
 })
 
 

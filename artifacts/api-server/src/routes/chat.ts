@@ -14,7 +14,7 @@ import {
   SendMessageParams,
   SendMessageBody,
 } from "@workspace/api-zod";
-import { buildRagContext } from "../lib/rag";
+import { buildContextFromSelection, buildRagContext } from "../lib/rag";
 import { streamChat } from "../lib/ai";
 
 const router: IRouter = Router();
@@ -96,6 +96,7 @@ router.get("/conversations/:id", async (req, res) => {
       conversationId: m.conversationId,
       role: m.role,
       content: m.content,
+      contextItems: m.contextItems ?? [],
       citations: m.citations ?? [],
       createdAt: m.createdAt.toISOString(),
     })),
@@ -148,6 +149,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     conversationId: id,
     role: "user",
     content: body.content,
+    contextItems: body.contextItems ?? [],
     citations: [],
   });
 
@@ -181,15 +183,37 @@ router.post("/conversations/:id/messages", async (req, res) => {
   let assembled = "";
 
   try {
-    const { contextText, citations: ragCitations } = await buildRagContext(user.id, body.content);
-    citations = ragCitations;
+    const pinned = body.contextItems ?? [];
+    const hasPinned = pinned.length > 0;
+
+    let contextText = "";
+    if (hasPinned) {
+      const scoped = await buildContextFromSelection(
+        user.id,
+        pinned.map((p) => ({ type: p.type, id: p.id })),
+      );
+      contextText = scoped.contextText;
+      citations = scoped.citations;
+      if (!contextText.trim()) {
+        const fallback = await buildRagContext(user.id, body.content);
+        contextText = fallback.contextText;
+        citations = fallback.citations;
+      }
+    } else {
+      const rag = await buildRagContext(user.id, body.content);
+      contextText = rag.contextText;
+      citations = rag.citations;
+    }
+
     if (citations.length > 0) {
       send({ citations });
     }
 
-    const baseSystem =
-      agentPrompt ??
+    const defaultSystem =
       "You are Eden, a calm and precise AI assistant for a personal knowledge workspace. Answer clearly and concisely. When you use the workspace context (pages or uploaded files/sources), reference it naturally and do not invent facts. If the user asks what files or documents are relevant, list them using the context titles.";
+    const pinnedSystem =
+      "You are Eden, a calm and precise AI assistant for a personal knowledge workspace. The user has **pinned** specific files, documents, or folders for this message — treat that material as the primary source of truth. When they ask for plans, roadmaps, timelines, milestones, checklists, summaries, or comparisons, respond with clear structure (sections, numbered steps, bullets). Stay grounded in the pinned context; if something is not specified there, say so. Do not invent facts.";
+    const baseSystem = agentPrompt ?? (hasPinned ? pinnedSystem : defaultSystem);
     const system = contextText
       ? `${baseSystem}\n\nUse the following workspace context when relevant. If the answer is not present, say what you do know and suggest what to look for next.\n\n--- WORKSPACE CONTEXT ---\n${contextText}\n--- END CONTEXT ---`
       : baseSystem;
@@ -219,6 +243,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     conversationId: id,
     role: "assistant",
     content: assembled,
+    contextItems: [],
     citations,
   });
   await db

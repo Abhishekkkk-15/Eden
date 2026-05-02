@@ -10,6 +10,8 @@ export * from './agent';
 export * from './agentRunResult';
 export * from './block';
 export * from './blockType';
+export * from './chatContextItem';
+export * from './chatContextItemType';
 export * from './citation';
 export * from './citationKind';
 export * from './conversation';

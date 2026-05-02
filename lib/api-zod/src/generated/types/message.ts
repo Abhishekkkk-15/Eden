@@ -5,6 +5,7 @@
  * Eden AI Workspace API
  * OpenAPI spec version: 0.1.0
  */
+import type { ChatContextItem } from './chatContextItem';
 import type { Citation } from './citation';
 import type { MessageRole } from './messageRole';
 
@@ -14,5 +15,6 @@ export interface Message {
   role: MessageRole;
   content: string;
   citations: Citation[];
+  contextItems: ChatContextItem[];
   createdAt: Date;
 }

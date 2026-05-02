@@ -124,7 +124,11 @@ function FolderCard({
   };
 
   const handleDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData("application/json", JSON.stringify({ type: "folder", id: folder.id }));
+    const title = `${folder.emoji ? `${folder.emoji} ` : ""}${folder.title}`;
+    e.dataTransfer.setData(
+      "application/json",
+      JSON.stringify({ type: "folder", id: folder.id, title }),
+    );
     e.dataTransfer.effectAllowed = "move";
     onDragStart();
   };
@@ -269,7 +273,10 @@ function SourceCard({
   const isPage = source.isPage ?? false;
 
   const handleDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData("application/json", JSON.stringify({ type: "source", id: source.id, isPage }));
+    e.dataTransfer.setData(
+      "application/json",
+      JSON.stringify({ type: "source", id: source.id, isPage, title: source.title }),
+    );
     e.dataTransfer.effectAllowed = "move";
   };
 

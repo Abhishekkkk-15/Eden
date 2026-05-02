@@ -761,7 +761,7 @@ export const useReorderBlocks = <TError = ErrorType<unknown>,
     }
 
 /**
- * @summary List text, URL, YouTube, image, and video sources
+ * @summary List text, URL, YouTube, image, video, and audio sources
  */
 export const getListSourcesUrl = () => {
 
@@ -816,7 +816,7 @@ export type ListSourcesQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List text, URL, YouTube, image, and video sources
+ * @summary List text, URL, YouTube, image, video, and audio sources
  */
 
 export function useListSources<TData = Awaited<ReturnType<typeof listSources>>, TError = ErrorType<unknown>>(
@@ -838,7 +838,7 @@ export function useListSources<TData = Awaited<ReturnType<typeof listSources>>, 
 
 
 /**
- * @summary Create a source from text, URL, YouTube, image, or video
+ * @summary Create a source from text, URL, YouTube, image, video, or audio
  */
 export const getCreateSourceUrl = () => {
 
@@ -895,7 +895,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CreateSourceMutationError = ErrorType<unknown>
 
     /**
- * @summary Create a source from text, URL, YouTube, image, or video
+ * @summary Create a source from text, URL, YouTube, image, video, or audio
  */
 export const useCreateSource = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSource>>, TError,{data: BodyType<CreateSourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}

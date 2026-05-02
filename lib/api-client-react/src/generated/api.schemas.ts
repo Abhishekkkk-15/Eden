@@ -155,6 +155,7 @@ export const SourceKind = {
   youtube: 'youtube',
   image: 'image',
   video: 'video',
+  audio: 'audio',
 } as const;
 
 export type SourceStatus = typeof SourceStatus[keyof typeof SourceStatus];
@@ -210,6 +211,7 @@ export const CreateSourceInputKind = {
   youtube: 'youtube',
   image: 'image',
   video: 'video',
+  audio: 'audio',
 } as const;
 
 export interface CreateSourceInput {
@@ -291,12 +293,31 @@ export interface Citation {
   snippet: string;
 }
 
+export type ChatContextItemType = typeof ChatContextItemType[keyof typeof ChatContextItemType];
+
+
+export const ChatContextItemType = {
+  source: 'source',
+  page: 'page',
+  folder: 'folder',
+} as const;
+
+/**
+ * Optional workspace item to scope the reply (file, document, or folder).
+ */
+export interface ChatContextItem {
+  type: ChatContextItemType;
+  id: number;
+  title?: string;
+}
+
 export interface Message {
   id: number;
   conversationId: number;
   role: MessageRole;
   content: string;
   citations: Citation[];
+  contextItems: ChatContextItem[];
   createdAt: string;
 }
 
@@ -312,6 +333,8 @@ export interface CreateConversationInput {
 
 export interface SendMessageInput {
   content: string;
+  /** When set, the model prioritizes these items (your files/folders). Drag them from Sources into chat. */
+  contextItems?: ChatContextItem[];
 }
 
 export interface Agent {
