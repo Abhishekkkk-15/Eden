@@ -3,16 +3,35 @@ import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetConversation,
+  useDeleteConversation,
   getGetConversationQueryKey,
+  getListConversationsQueryKey,
+  getGetRecentActivityQueryKey,
+  getGetDashboardSummaryQueryKey,
   type Citation,
   type Message,
 } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Send, FileText, Database, Sparkles } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Send, FileText, Database, Sparkles, FolderOpen, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+
+function chatPostHeaders(): HeadersInit {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const token = localStorage.getItem("token");
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
 
 interface PendingMessage {
   role: "user" | "assistant";
@@ -24,10 +43,12 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
   const id = Number(params.id);
   const queryClient = useQueryClient();
   const { data: conversation, isLoading } = useGetConversation(id);
+  const deleteConversation = useDeleteConversation();
 
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [pending, setPending] = useState<PendingMessage[]>([]);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [, navigate] = useLocation();
   const scrollerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -58,9 +79,13 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
       const url = `${import.meta.env.BASE_URL}api/conversations/${id}/messages`;
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: chatPostHeaders(),
         body: JSON.stringify({ content }),
       });
+      if (res.status === 401) {
+        toast.error("Session expired — sign in again.");
+        throw new Error("Unauthorized");
+      }
       if (!res.ok || !res.body) {
         throw new Error(`Request failed: ${res.status}`);
       }
@@ -126,13 +151,31 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
       setStreaming(false);
       setPending([]);
       await queryClient.invalidateQueries({ queryKey: getGetConversationQueryKey(id) });
-      await queryClient.invalidateQueries({ queryKey: ["/conversations"] });
+      await queryClient.invalidateQueries({ queryKey: getListConversationsQueryKey() });
     }
   };
 
   const handleCitationClick = (c: Citation) => {
     if (c.kind === "page") navigate(`/pages/${c.refId}`);
     else navigate(`/sources/${c.refId}`);
+  };
+
+  const handleConfirmDelete = () => {
+    deleteConversation.mutate(
+      { id },
+      {
+        onSuccess: async () => {
+          setDeleteOpen(false);
+          await queryClient.removeQueries({ queryKey: getGetConversationQueryKey(id) });
+          await queryClient.invalidateQueries({ queryKey: getListConversationsQueryKey() });
+          await queryClient.invalidateQueries({ queryKey: getGetRecentActivityQueryKey() });
+          await queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          toast.success("Conversation deleted");
+          navigate("/chat");
+        },
+        onError: () => toast.error("Could not delete conversation"),
+      },
+    );
   };
 
   if (isLoading) {
@@ -160,12 +203,25 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
   return (
     <div className="flex flex-col h-[100dvh]">
       <div className="px-8 py-5 border-b border-border bg-background/80 backdrop-blur">
-        <Link href="/chat" className="text-xs text-muted-foreground hover:text-foreground">
-          {"←"} All conversations
-        </Link>
-        <h1 className="text-lg font-semibold tracking-tight mt-1">
-          {conversation.title}
-        </h1>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <Link href="/chat" className="text-xs text-muted-foreground hover:text-foreground">
+              {"←"} All conversations
+            </Link>
+            <h1 className="text-lg font-semibold tracking-tight mt-1 truncate">
+              {conversation.title}
+            </h1>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
+            onClick={() => setDeleteOpen(true)}>
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </Button>
+        </div>
       </div>
 
       <div ref={scrollerRef} className="flex-1 overflow-y-auto">
@@ -175,7 +231,7 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
               <Sparkles className="mx-auto h-8 w-8 mb-3 opacity-60" />
               <p className="text-sm">Ask anything about your workspace.</p>
               <p className="text-xs mt-1 opacity-70">
-                Eden grounds answers in your pages and sources when relevant.
+                Each reply searches your pages and files, then shows what was used below the answer.
               </p>
             </div>
           )}
@@ -229,6 +285,81 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
           </p>
         </div>
       </div>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this conversation?</AlertDialogTitle>
+            <AlertDialogDescription>
+              All messages in &ldquo;{conversation.title}&rdquo; will be removed. This cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={deleteConversation.isPending}
+              onClick={() => handleConfirmDelete()}>
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function CitationReferences({
+  citations,
+  onCitationClick,
+}: {
+  citations: Citation[];
+  onCitationClick: (c: Citation) => void;
+}) {
+  const pages = citations.filter((c) => c.kind === "page");
+  const files = citations.filter((c) => c.kind === "source");
+
+  const row = (c: Citation, i: number) => (
+    <button
+      key={`${c.kind}-${c.refId}-${i}`}
+      type="button"
+      onClick={() => onCitationClick(c)}
+      className="w-full rounded-xl border border-border/80 bg-background/60 px-3 py-2 text-left transition-colors hover:border-primary/30 hover:bg-accent/40">
+      <div className="flex items-center gap-2">
+        {c.kind === "page" ?
+          <FileText className="h-3.5 w-3.5 shrink-0 text-primary" />
+        : <Database className="h-3.5 w-3.5 shrink-0 text-primary" />}
+        <span className="text-sm font-medium leading-tight text-foreground">{c.title}</span>
+      </div>
+      {c.snippet ?
+        <p className="mt-1.5 pl-[22px] text-xs leading-snug text-muted-foreground line-clamp-2">
+          {c.snippet.replace(/[<>]/g, "")}
+        </p>
+      : null}
+    </button>
+  );
+
+  return (
+    <div className="w-full max-w-[95%] space-y-3">
+      {files.length > 0 ?
+        <div>
+          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <FolderOpen className="h-3 w-3" />
+            Files &amp; sources
+          </div>
+          <div className="space-y-2">{files.map((c, i) => row(c, i))}</div>
+        </div>
+      : null}
+      {pages.length > 0 ?
+        <div>
+          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <FileText className="h-3 w-3" />
+            Pages
+          </div>
+          <div className="space-y-2">{pages.map((c, i) => row(c, i))}</div>
+        </div>
+      : null}
     </div>
   );
 }
@@ -268,28 +399,7 @@ function MessageBubble({
           )}
         </div>
         {!isUser && citations.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {citations.map((c, i) => (
-              <button
-                key={`${c.kind}-${c.refId}-${i}`}
-                type="button"
-                onClick={() => onCitationClick(c)}
-                className="group"
-              >
-                <Badge
-                  variant="outline"
-                  className="gap-1.5 hover:bg-accent transition-colors"
-                >
-                  {c.kind === "page" ? (
-                    <FileText className="h-3 w-3" />
-                  ) : (
-                    <Database className="h-3 w-3" />
-                  )}
-                  <span className="font-normal">{c.title}</span>
-                </Badge>
-              </button>
-            ))}
-          </div>
+          <CitationReferences citations={citations} onCitationClick={onCitationClick} />
         )}
       </div>
     </div>

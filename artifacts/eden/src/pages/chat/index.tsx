@@ -1,20 +1,39 @@
 import {
   useListConversations,
   useCreateConversation,
+  useDeleteConversation,
   getListConversationsQueryKey,
+  getGetRecentActivityQueryKey,
+  getGetDashboardSummaryQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { MessageSquare, Plus, Bot } from "lucide-react";
+import { MessageSquare, Plus, Bot, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
+import { useState } from "react";
+import { toast } from "sonner";
 
 export default function ChatList() {
   const { data: conversations, isLoading } = useListConversations();
   const createConversation = useCreateConversation();
+  const deleteConversation = useDeleteConversation();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+  const [pendingDelete, setPendingDelete] = useState<{
+    id: number;
+    title: string;
+  } | null>(null);
 
   const handleNewChat = () => {
     createConversation.mutate(
@@ -25,6 +44,32 @@ export default function ChatList() {
             queryKey: getListConversationsQueryKey(),
           });
           setLocation(`/chat/${c.id}`);
+        },
+      },
+    );
+  };
+
+  const confirmDelete = () => {
+    if (!pendingDelete) return;
+    const { id } = pendingDelete;
+    deleteConversation.mutate(
+      { id },
+      {
+        onSuccess: async () => {
+          setPendingDelete(null);
+          await queryClient.invalidateQueries({
+            queryKey: getListConversationsQueryKey(),
+          });
+          await queryClient.invalidateQueries({
+            queryKey: getGetRecentActivityQueryKey(),
+          });
+          await queryClient.invalidateQueries({
+            queryKey: getGetDashboardSummaryQueryKey(),
+          });
+          toast.success("Conversation deleted");
+        },
+        onError: () => {
+          toast.error("Could not delete conversation");
         },
       },
     );
@@ -47,18 +92,34 @@ export default function ChatList() {
               <Skeleton key={i} className="h-12 w-full rounded-md" />
             ))
           : conversations?.map((c) => (
-              <Link key={c.id} href={`/chat/${c.id}`}>
-                <div className="p-3 rounded-md hover:bg-sidebar-accent cursor-pointer transition-colors space-y-1">
+              <div
+                key={c.id}
+                className="group flex items-stretch rounded-md transition-colors hover:bg-sidebar-accent">
+                <Link href={`/chat/${c.id}`} className="min-w-0 flex-1 p-3">
                   <div className="flex items-center gap-2 font-medium text-sm text-sidebar-foreground truncate">
                     <MessageSquare className="w-4 h-4 text-muted-foreground shrink-0" />
                     <span className="truncate">{c.title}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground flex justify-between">
+                  <div className="text-xs text-muted-foreground flex justify-between mt-1">
                     <span>{c.messageCount} msgs</span>
                     <span>{format(new Date(c.updatedAt), "MMM d")}</span>
                   </div>
+                </Link>
+                <div className="flex items-center pr-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
+                    aria-label={`Delete ${c.title}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setPendingDelete({ id: c.id, title: c.title });
+                    }}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
-              </Link>
+              </div>
             ))
           }
         </div>
@@ -71,9 +132,8 @@ export default function ChatList() {
           <div className="space-y-2">
             <h2 className="text-2xl font-semibold">Workspace AI Assistant</h2>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Ask questions about your pages and sources. The assistant
-              automatically searches your workspace to provide accurate, cited
-              answers.
+              Ask questions about your pages and uploaded files. Each reply searches
+              your library and lists the documents and sources it used.
             </p>
           </div>
           <Button
@@ -84,6 +144,35 @@ export default function ChatList() {
           </Button>
         </div>
       </div>
+
+      <AlertDialog
+        open={pendingDelete != null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete conversation?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete ?
+                <>
+                  This removes &ldquo;{pendingDelete.title}&rdquo; and all of its messages.
+                  This cannot be undone.
+                </>
+              : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={deleteConversation.isPending}
+              onClick={() => confirmDelete()}>
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

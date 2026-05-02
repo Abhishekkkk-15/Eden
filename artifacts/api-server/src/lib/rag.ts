@@ -12,10 +12,21 @@ export type RagHit = {
   score: number;
 };
 
-export async function searchWorkspace(userId: string, query: string, limit = 12): Promise<RagHit[]> {
-  const q = query.trim();
-  if (!q) return [];
-  const tsq = sql`websearch_to_tsquery('english', ${q})`;
+type TsMode = "websearch" | "plain";
+
+function tsQueryFragment(q: string, mode: TsMode) {
+  return mode === "websearch" ?
+      sql`websearch_to_tsquery('english', ${q})`
+    : sql`plainto_tsquery('english', ${q})`;
+}
+
+async function searchWorkspaceWithMode(
+  userId: string,
+  q: string,
+  limit: number,
+  mode: TsMode,
+): Promise<RagHit[]> {
+  const tsq = tsQueryFragment(q, mode);
 
   const pageRows = await db.execute(sql`
     SELECT p.id, p.title,
@@ -113,11 +124,22 @@ export async function searchWorkspace(userId: string, query: string, limit = 12)
   return hits.slice(0, limit);
 }
 
+/** Full-text search across pages, blocks, uploaded files, and chunks. Tries plain search if web syntax yields nothing (better for chat questions). */
+export async function searchWorkspace(userId: string, query: string, limit = 12): Promise<RagHit[]> {
+  const q = query.trim();
+  if (!q) return [];
+  let hits = await searchWorkspaceWithMode(userId, q, limit, "websearch");
+  if (hits.length === 0) {
+    hits = await searchWorkspaceWithMode(userId, q, limit, "plain");
+  }
+  return hits;
+}
+
 export async function buildRagContext(userId: string, query: string): Promise<{
   contextText: string;
   citations: Citation[];
 }> {
-  const hits = await searchWorkspace(userId, query, 8);
+  const hits = await searchWorkspace(userId, query, 14);
   if (hits.length === 0) return { contextText: "", citations: [] };
 
   const citationMap = new Map<string, Citation>();
@@ -168,7 +190,7 @@ export async function buildRagContext(userId: string, query: string): Promise<{
 
   return {
     contextText: blocks.join("\n\n---\n\n"),
-    citations: Array.from(citationMap.values()).slice(0, 8),
+    citations: Array.from(citationMap.values()).slice(0, 10),
   };
 }
 

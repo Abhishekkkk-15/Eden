@@ -23,13 +23,20 @@ router.get("/dashboard/summary", async (req, res) => {
     .where(eq(sourcesTable.userId, user.id));
   const [agentRow] = await db
     .select({ c: sql<number>`count(*)::int` })
-    .from(agentsTable); // Agents are global for now or need userId too
+    .from(agentsTable)
+    .where(eq(agentsTable.userId, user.id));
   const [convRow] = await db
     .select({ c: sql<number>`count(*)::int` })
-    .from(conversationsTable);
+    .from(conversationsTable)
+    .where(eq(conversationsTable.userId, user.id));
   const [msgRow] = await db
     .select({ c: sql<number>`count(*)::int` })
-    .from(messagesTable);
+    .from(messagesTable)
+    .innerJoin(
+      conversationsTable,
+      eq(messagesTable.conversationId, conversationsTable.id),
+    )
+    .where(eq(conversationsTable.userId, user.id));
   res.json({
     pageCount: Number(pageRow?.c ?? 0),
     sourceCount: Number(sourceRow?.c ?? 0),
@@ -56,8 +63,9 @@ router.get("/dashboard/recent", async (req, res) => {
   const recentConvs = await db
     .select()
     .from(conversationsTable)
+    .where(eq(conversationsTable.userId, user.id))
     .orderBy(desc(conversationsTable.updatedAt))
-    .limit(5); // TODO: Add userId to conversations table
+    .limit(5);
 
   const items = [
     ...recentPages.map((p) => ({

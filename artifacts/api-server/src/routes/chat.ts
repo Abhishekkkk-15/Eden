@@ -6,7 +6,7 @@ import {
   agentsTable,
   type Citation,
 } from "@workspace/db";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import {
   CreateConversationBody,
   GetConversationParams,
@@ -66,10 +66,11 @@ router.post("/conversations", async (req, res) => {
 
 router.get("/conversations/:id", async (req, res) => {
   const { id } = GetConversationParams.parse(req.params);
+  const user = (req as any).user;
   const [conv] = await db
     .select()
     .from(conversationsTable)
-    .where(eq(conversationsTable.id, id));
+    .where(and(eq(conversationsTable.id, id), eq(conversationsTable.userId, user.id)));
   if (!conv) {
     res.status(404).json({ error: "Conversation not found" });
     return;
@@ -103,19 +104,31 @@ router.get("/conversations/:id", async (req, res) => {
 
 router.delete("/conversations/:id", async (req, res) => {
   const { id } = DeleteConversationParams.parse(req.params);
+  const user = (req as any).user;
+  const [conv] = await db
+    .select({ id: conversationsTable.id })
+    .from(conversationsTable)
+    .where(and(eq(conversationsTable.id, id), eq(conversationsTable.userId, user.id)));
+  if (!conv) {
+    res.status(404).json({ error: "Conversation not found" });
+    return;
+  }
   await db.delete(messagesTable).where(eq(messagesTable.conversationId, id));
-  await db.delete(conversationsTable).where(eq(conversationsTable.id, id));
+  await db
+    .delete(conversationsTable)
+    .where(and(eq(conversationsTable.id, id), eq(conversationsTable.userId, user.id)));
   res.status(204).end();
 });
 
 router.post("/conversations/:id/messages", async (req, res) => {
   const { id } = SendMessageParams.parse(req.params);
   const body = SendMessageBody.parse(req.body);
+  const user = (req as any).user;
 
   const [conv] = await db
     .select()
     .from(conversationsTable)
-    .where(eq(conversationsTable.id, id));
+    .where(and(eq(conversationsTable.id, id), eq(conversationsTable.userId, user.id)));
   if (!conv) {
     res.status(404).json({ error: "Conversation not found" });
     return;
@@ -144,7 +157,9 @@ router.post("/conversations/:id/messages", async (req, res) => {
     .where(eq(messagesTable.conversationId, id))
     .orderBy(asc(messagesTable.createdAt), asc(messagesTable.id));
 
-  if (conv.title === "New chat" && history.length <= 1) {
+  const isDefaultTitle =
+    conv.title === "New chat" || conv.title === "New Conversation";
+  if (isDefaultTitle && history.length <= 1) {
     const newTitle = body.content.replace(/\s+/g, " ").trim().slice(0, 60) || "New chat";
     await db
       .update(conversationsTable)
@@ -165,7 +180,6 @@ router.post("/conversations/:id/messages", async (req, res) => {
   let citations: Citation[] = [];
   let assembled = "";
 
-  const user = (req as any).user;
   try {
     const { contextText, citations: ragCitations } = await buildRagContext(user.id, body.content);
     citations = ragCitations;
@@ -175,7 +189,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
     const baseSystem =
       agentPrompt ??
-      "You are Eden, a calm and precise AI assistant for a personal knowledge workspace. Answer clearly and concisely. When you use the workspace context, reference it naturally without inventing facts.";
+      "You are Eden, a calm and precise AI assistant for a personal knowledge workspace. Answer clearly and concisely. When you use the workspace context (pages or uploaded files/sources), reference it naturally and do not invent facts. If the user asks what files or documents are relevant, list them using the context titles.";
     const system = contextText
       ? `${baseSystem}\n\nUse the following workspace context when relevant. If the answer is not present, say what you do know and suggest what to look for next.\n\n--- WORKSPACE CONTEXT ---\n${contextText}\n--- END CONTEXT ---`
       : baseSystem;
