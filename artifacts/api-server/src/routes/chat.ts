@@ -19,11 +19,13 @@ import { streamChat } from "../lib/ai";
 
 const router: IRouter = Router();
 
-router.get("/conversations", async (_req, res) => {
+router.get("/conversations", async (req, res) => {
+  const user = (req as any).user;
   const rows = await db.execute(sql`
     SELECT c.id, c.title, c.agent_id, c.created_at, c.updated_at,
            (SELECT count(*) FROM messages m WHERE m.conversation_id = c.id) AS message_count
     FROM conversations c
+    WHERE c.user_id = ${user.id}
     ORDER BY c.updated_at DESC
   `);
   res.json(
@@ -37,12 +39,13 @@ router.get("/conversations", async (_req, res) => {
     })),
   );
 });
-
 router.post("/conversations", async (req, res) => {
   const body = CreateConversationBody.parse(req.body);
+  const user = (req as any).user;
   const [created] = await db
     .insert(conversationsTable)
     .values({
+      userId: user.id,
       title: body.title,
       agentId: body.agentId ?? null,
     })
@@ -162,8 +165,9 @@ router.post("/conversations/:id/messages", async (req, res) => {
   let citations: Citation[] = [];
   let assembled = "";
 
+  const user = (req as any).user;
   try {
-    const { contextText, citations: ragCitations } = await buildRagContext(body.content);
+    const { contextText, citations: ragCitations } = await buildRagContext(user.id, body.content);
     citations = ragCitations;
     if (citations.length > 0) {
       send({ citations });

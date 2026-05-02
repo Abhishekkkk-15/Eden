@@ -1,7 +1,9 @@
 import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { usersTable } from "./auth";
 
 export const conversationsTable = pgTable("conversations", {
   id: serial("id").primaryKey(),
+  userId: text("user_id").references(() => usersTable.id),
   title: text("title").notNull(),
   agentId: integer("agent_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

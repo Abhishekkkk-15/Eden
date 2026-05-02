@@ -12,7 +12,7 @@ export type RagHit = {
   score: number;
 };
 
-export async function searchWorkspace(query: string, limit = 12): Promise<RagHit[]> {
+export async function searchWorkspace(userId: string, query: string, limit = 12): Promise<RagHit[]> {
   const q = query.trim();
   if (!q) return [];
   const tsq = sql`websearch_to_tsquery('english', ${q})`;
@@ -23,7 +23,7 @@ export async function searchWorkspace(query: string, limit = 12): Promise<RagHit
            ts_headline('english', p.title, ${tsq},
              'StartSel=, StopSel=, MaxFragments=1, MaxWords=18, MinWords=4') AS snippet
     FROM pages p
-    WHERE to_tsvector('english', p.title) @@ ${tsq}
+    WHERE p.user_id = ${userId} AND to_tsvector('english', p.title) @@ ${tsq}
     ORDER BY score DESC
     LIMIT ${limit}
   `);
@@ -35,7 +35,7 @@ export async function searchWorkspace(query: string, limit = 12): Promise<RagHit
              'StartSel=, StopSel=, MaxFragments=1, MaxWords=24, MinWords=6') AS snippet
     FROM blocks b
     JOIN pages p ON p.id = b.page_id
-    WHERE b.content <> '' AND to_tsvector('english', b.content) @@ ${tsq}
+    WHERE p.user_id = ${userId} AND b.content <> '' AND to_tsvector('english', b.content) @@ ${tsq}
     ORDER BY score DESC
     LIMIT ${limit}
   `);
@@ -46,7 +46,7 @@ export async function searchWorkspace(query: string, limit = 12): Promise<RagHit
            ts_headline('english', coalesce(s.summary, s.title), ${tsq},
              'StartSel=, StopSel=, MaxFragments=1, MaxWords=24, MinWords=6') AS snippet
     FROM sources s
-    WHERE to_tsvector('english', s.title || ' ' || coalesce(s.summary, '') || ' ' || coalesce(s.content, '')) @@ ${tsq}
+    WHERE s.user_id = ${userId} AND to_tsvector('english', s.title || ' ' || coalesce(s.summary, '') || ' ' || coalesce(s.content, '')) @@ ${tsq}
     ORDER BY score DESC
     LIMIT ${limit}
   `);
@@ -58,7 +58,7 @@ export async function searchWorkspace(query: string, limit = 12): Promise<RagHit
              'StartSel=, StopSel=, MaxFragments=1, MaxWords=28, MinWords=8') AS snippet
     FROM source_chunks c
     JOIN sources s ON s.id = c.source_id
-    WHERE to_tsvector('english', c.content) @@ ${tsq}
+    WHERE s.user_id = ${userId} AND to_tsvector('english', c.content) @@ ${tsq}
     ORDER BY score DESC
     LIMIT ${limit}
   `);
@@ -113,11 +113,11 @@ export async function searchWorkspace(query: string, limit = 12): Promise<RagHit
   return hits.slice(0, limit);
 }
 
-export async function buildRagContext(query: string): Promise<{
+export async function buildRagContext(userId: string, query: string): Promise<{
   contextText: string;
   citations: Citation[];
 }> {
-  const hits = await searchWorkspace(query, 8);
+  const hits = await searchWorkspace(userId, query, 8);
   if (hits.length === 0) return { contextText: "", citations: [] };
 
   const citationMap = new Map<string, Citation>();

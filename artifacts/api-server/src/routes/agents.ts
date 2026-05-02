@@ -14,16 +14,23 @@ import { completeText } from "../lib/ai";
 
 const router: IRouter = Router();
 
-router.get("/agents", async (_req, res) => {
-  const rows = await db.select().from(agentsTable).orderBy(desc(agentsTable.updatedAt));
+router.get("/agents", async (req, res) => {
+  const user = (req as any).user;
+  const rows = await db
+    .select()
+    .from(agentsTable)
+    .where(eq(agentsTable.userId, user.id))
+    .orderBy(desc(agentsTable.updatedAt));
   res.json(rows);
 });
 
 router.post("/agents", async (req, res) => {
   const body = CreateAgentBody.parse(req.body);
+  const user = (req as any).user;
   const [created] = await db
     .insert(agentsTable)
     .values({
+      userId: user.id,
       name: body.name,
       description: body.description,
       emoji: body.emoji,
@@ -77,10 +84,11 @@ router.post("/agents/:id/run", async (req, res) => {
     return;
   }
 
+  const user = (req as any).user;
   let citations: Awaited<ReturnType<typeof buildRagContext>>["citations"] = [];
   let context = "";
   if (body.useWorkspaceContext) {
-    const r = await buildRagContext(body.input);
+    const r = await buildRagContext(user.id, body.input);
     context = r.contextText;
     citations = r.citations;
   }

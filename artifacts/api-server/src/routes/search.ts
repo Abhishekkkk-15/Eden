@@ -5,8 +5,9 @@ import { searchWorkspace } from "../lib/rag";
 const router: IRouter = Router();
 
 router.get("/search", async (req, res) => {
+  const user = (req as any).user;
   const { q } = SearchWorkspaceQueryParams.parse(req.query);
-  const hits = await searchWorkspace(q, 20);
+  const hits = await searchWorkspace(user.id, q, 20);
   res.json(hits);
 });
 

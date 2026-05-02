@@ -39,22 +39,25 @@ router.get("/dashboard/summary", async (req, res) => {
   });
 });
 
-router.get("/dashboard/recent", async (_req, res) => {
+router.get("/dashboard/recent", async (req, res) => {
+  const user = (req as any).user;
   const recentPages = await db
     .select()
     .from(pagesTable)
+    .where(eq(pagesTable.userId, user.id))
     .orderBy(desc(pagesTable.updatedAt))
     .limit(5);
   const recentSources = await db
     .select()
     .from(sourcesTable)
+    .where(eq(sourcesTable.userId, user.id))
     .orderBy(desc(sourcesTable.createdAt))
     .limit(5);
   const recentConvs = await db
     .select()
     .from(conversationsTable)
     .orderBy(desc(conversationsTable.updatedAt))
-    .limit(5);
+    .limit(5); // TODO: Add userId to conversations table
 
   const items = [
     ...recentPages.map((p) => ({
