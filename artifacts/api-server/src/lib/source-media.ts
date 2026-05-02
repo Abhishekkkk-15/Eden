@@ -3,6 +3,7 @@ import { uploadToCloudinary, deleteFromCloudinary } from "@workspace/integration
 import ytdl from "@distube/ytdl-core";
 import { YoutubeTranscript } from "youtube-transcript";
 import { describeImageDataUrl, summarize } from "./ai";
+import { extractAndAnalyzeVideoFrames } from "./video-frames";
 
 export type ParsedDataUrl = {
   mimeType: string;
@@ -95,49 +96,146 @@ export async function extractVideoContent(opts: {
   buffer: Buffer;
   title: string;
   originalFilename?: string | null;
-}): Promise<{ content: string; summary: string | null }> {
+}): Promise<{ content: string; summary: string | null; visualDescription?: string }> {
   try {
-    const { text } = await transcribeAudio(opts.buffer, opts.originalFilename ?? undefined);
-    const content = text.trim();
-    if (!content) return { content: "", summary: null };
-    return { content, summary: await summarize(content) };
+    // 1. Extract audio transcription
+    const { text: audioText } = await transcribeAudio(opts.buffer, opts.originalFilename ?? undefined);
+    const audioContent = audioText.trim();
+
+    // 2. Extract visual frames and analyze with vision
+    let visualDescription = "";
+    try {
+      const { combinedDescription } = await extractAndAnalyzeVideoFrames(
+        opts.buffer,
+        opts.title,
+        {
+          intervalSeconds: 5,
+          maxFrames: 20,
+          width: 512,
+        }
+      );
+      visualDescription = combinedDescription;
+    } catch (visualErr) {
+      console.warn("Visual frame extraction failed:", visualErr);
+    }
+
+    // 3. Combine audio and visual content
+    let combinedContent = "";
+    if (audioContent && visualDescription) {
+      combinedContent = `AUDIO TRANSCRIPTION:\n${audioContent}\n\nVISUAL ANALYSIS:\n${visualDescription}`;
+    } else if (audioContent) {
+      combinedContent = audioContent;
+    } else if (visualDescription) {
+      combinedContent = visualDescription;
+    } else {
+      return { content: "", summary: null };
+    }
+
+    return {
+      content: combinedContent,
+      summary: await summarize(combinedContent),
+      visualDescription,
+    };
   } catch (err) {
     console.error("extractVideoContent failed:", err);
-    const fallback = `Video source titled "${opts.title}". Transcript unavailable.`;
+    const fallback = `Video source titled "${opts.title}". Content extraction unavailable.`;
     return { content: fallback, summary: fallback };
   }
 }
 
-export async function extractYouTubeContent(url: string): Promise<{ content: string; summary: string | null }> {
+export async function extractYouTubeContent(url: string): Promise<{ content: string; summary: string | null; visualDescription?: string }> {
   try {
+    let audioContent = "";
+    let visualDescription = "";
+
     // 1. Try fetching official/auto-generated captions (Fast & Reliable)
     try {
       const transcript = await YoutubeTranscript.fetchTranscript(url);
-      const content = transcript.map((t) => t.text).join(" ");
-      if (content && content.trim().length > 0) {
-        return {
-          content: content.trim(),
-          summary: await summarize(content),
-        };
-      }
+      audioContent = transcript.map((t) => t.text).join(" ");
     } catch (transcriptErr) {
-      console.warn("YoutubeTranscript failed, falling back to audio extraction:", transcriptErr);
+      console.warn("YoutubeTranscript failed, will try audio extraction:", transcriptErr);
     }
 
-    // 2. Fallback to audio stream extraction (use ytdl + Groq Whisper)
-    const stream = ytdl(url, { quality: "lowestaudio", filter: "audioonly" });
-    const chunks: Buffer[] = [];
-    for await (const chunk of stream) chunks.push(chunk);
-    const buffer = Buffer.concat(chunks);
-    const { text } = await transcribeAudio(buffer, "youtube.mp3");
-    const content = text.trim();
-    if (!content) return { content: "", summary: null };
-    return { content, summary: await summarize(content) };
+    // 2. Download video for both audio and visual analysis
+    try {
+      // Download video (low quality for faster processing)
+      const videoStream = ytdl(url, {
+        quality: "lowest",
+        filter: (format) => format.hasVideo && format.hasAudio,
+      });
+
+      const chunks: Buffer[] = [];
+      for await (const chunk of videoStream) chunks.push(chunk);
+      const videoBuffer = Buffer.concat(chunks);
+
+      // Extract audio if we don't have transcript
+      if (!audioContent) {
+        try {
+          const audioStream = ytdl(url, { quality: "lowestaudio", filter: "audioonly" });
+          const audioChunks: Buffer[] = [];
+          for await (const chunk of audioStream) audioChunks.push(chunk);
+          const audioBuffer = Buffer.concat(audioChunks);
+          const { text } = await transcribeAudio(audioBuffer, "youtube.mp3");
+          audioContent = text.trim();
+        } catch (audioErr) {
+          console.warn("Audio extraction failed:", audioErr);
+        }
+      }
+
+      // Extract visual frames
+      try {
+        const { combinedDescription } = await extractAndAnalyzeVideoFrames(
+          videoBuffer,
+          "YouTube Video",
+          {
+            intervalSeconds: 10, // Less frequent for YouTube (longer videos)
+            maxFrames: 15,
+            width: 512,
+          }
+        );
+        visualDescription = combinedDescription;
+      } catch (visualErr) {
+        console.warn("Visual frame extraction failed for YouTube:", visualErr);
+      }
+    } catch (downloadErr) {
+      console.warn("Video download failed, trying audio-only fallback:", downloadErr);
+
+      // Fallback to audio-only
+      if (!audioContent) {
+        const stream = ytdl(url, { quality: "lowestaudio", filter: "audioonly" });
+        const chunks: Buffer[] = [];
+        for await (const chunk of stream) chunks.push(chunk);
+        const buffer = Buffer.concat(chunks);
+        const { text } = await transcribeAudio(buffer, "youtube.mp3");
+        audioContent = text.trim();
+      }
+    }
+
+    // Combine results
+    let combinedContent = "";
+    if (audioContent && visualDescription) {
+      combinedContent = `AUDIO TRANSCRIPTION:\n${audioContent}\n\nVISUAL ANALYSIS:\n${visualDescription}`;
+    } else if (audioContent) {
+      combinedContent = audioContent;
+    } else if (visualDescription) {
+      combinedContent = visualDescription;
+    } else {
+      return {
+        content: "Failed to extract content from YouTube video. The video might be restricted.",
+        summary: null,
+      };
+    }
+
+    return {
+      content: combinedContent.trim(),
+      summary: await summarize(combinedContent),
+      visualDescription: visualDescription || undefined,
+    };
   } catch (err) {
     console.error("extractYouTubeContent failed completely:", err);
-    return { 
-      content: "Failed to extract transcript from YouTube video. The video might be restricted or restricted from your current server location.", 
-      summary: null 
+    return {
+      content: "Failed to extract content from YouTube video. The video might be restricted or restricted from your current server location.",
+      summary: null,
     };
   }
 }

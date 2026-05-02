@@ -4,6 +4,7 @@ import {
   transcribeAudio,
 } from "@workspace/integrations-groq-ai-server";
 import { chunkText } from "./rag";
+import { extractAndAnalyzeVideoFrames, type VideoFrame } from "./video-frames";
 
 /**
  * Transcribe audio or video file using Groq Whisper
@@ -145,4 +146,76 @@ export async function searchTranscriptions(keyword: string): Promise<Array<{ sou
     .where(ilike(transcriptionsTable.content, `%${keyword}%`));
 
   return results;
+}
+
+/**
+ * Extract and analyze video frames, storing descriptions as searchable chunks
+ */
+export async function transcribeVideoFrames(
+  sourceId: number,
+  mediaUrl: string,
+  title: string
+): Promise<{ frameCount: number; descriptions: string }> {
+  try {
+    // Fetch video
+    const response = await fetch(mediaUrl);
+    if (!response.ok) throw new Error(`Failed to fetch video from ${mediaUrl}: ${response.statusText}`);
+    const videoBuffer = Buffer.from(await response.arrayBuffer());
+
+    // Extract and analyze frames
+    const { frames, combinedDescription } = await extractAndAnalyzeVideoFrames(
+      videoBuffer,
+      title,
+      {
+        intervalSeconds: 5, // Extract frame every 5 seconds
+        maxFrames: 20, // Max 20 frames to avoid too many API calls
+        width: 512, // Resize for faster processing
+      }
+    );
+
+    if (frames.length === 0) {
+      return { frameCount: 0, descriptions: "" };
+    }
+
+    // Store frame descriptions as chunks with timestamps
+    const frameChunks = frames
+      .filter((f): f is VideoFrame & { description: string } => !!f.description)
+      .map((frame, i) => ({
+        sourceId,
+        position: 3000 + i, // Offset for visual frame chunks
+        content: `[Visual Frame ${formatTimestamp(frame.timestamp)}] ${frame.description}`,
+      }));
+
+    if (frameChunks.length > 0) {
+      await db.insert(sourceChunksTable).values(frameChunks);
+    }
+
+    // Store visual transcription summary
+    await db.insert(transcriptionsTable).values({
+      sourceId,
+      content: combinedDescription,
+      model: "vision-frames-analysis",
+    }).onConflictDoUpdate({
+      target: transcriptionsTable.sourceId,
+      set: {
+        content: combinedDescription,
+        model: "vision-frames-analysis",
+        updatedAt: new Date(),
+      },
+    });
+
+    return {
+      frameCount: frames.length,
+      descriptions: combinedDescription,
+    };
+  } catch (error) {
+    console.error(`Failed to transcribe video frames for source ${sourceId}:`, error);
+    throw error;
+  }
+}
+
+function formatTimestamp(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
 }

@@ -240,8 +240,9 @@ router.post("/sources", async (req, res) => {
       let transcription: string | null = null;
 
       // Run transcription for media files in parallel with other processing
-      // (image, video, audio all get a dedicated transcriptions table row)
-      if (["video", "audio", "image"].includes(body.kind)) {
+      // Note: Video now includes visual frame analysis in extractVideoContent, so we skip redundant transcription
+      // Audio and image still need separate transcription
+      if (["audio", "image"].includes(body.kind)) {
         void (async () => {
           try {
             await transcribeSource(pending.id, body.kind, mediaPath);

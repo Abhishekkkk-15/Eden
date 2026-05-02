@@ -41,9 +41,21 @@ export const transcriptionsTable = pgTable("transcriptions", {
     .$onUpdate(() => new Date()),
 });
 
+// Store video frame thumbnails for visual preview
+export const videoFramesTable = pgTable("video_frames", {
+  id: serial("id").primaryKey(),
+  sourceId: integer("source_id").notNull(),
+  timestamp: integer("timestamp").notNull(), // Seconds from start
+  thumbnailUrl: text("thumbnail_url").notNull(), // Cloudinary URL
+  description: text("description"), // Vision model description
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type Source = typeof sourcesTable.$inferSelect;
 export type InsertSource = typeof sourcesTable.$inferInsert;
 export type SourceChunk = typeof sourceChunksTable.$inferSelect;
 export type InsertSourceChunk = typeof sourceChunksTable.$inferInsert;
 export type Transcription = typeof transcriptionsTable.$inferSelect;
 export type InsertTranscription = typeof transcriptionsTable.$inferInsert;
+export type VideoFrame = typeof videoFramesTable.$inferSelect;
+export type InsertVideoFrame = typeof videoFramesTable.$inferInsert;
