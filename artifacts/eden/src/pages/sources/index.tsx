@@ -21,7 +21,7 @@ import {
   FileText,
   Film,
   Folder,
-  Grid2X2,
+  HardDrive,
   ImageIcon,
   Link as LinkIcon,
   Plus,
@@ -52,6 +52,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SourceCreateDialog } from "@/components/sources/source-create-dialog";
+import { WorkspaceSearchPanel } from "@/components/sources/workspace-search-panel";
 import { toast } from "sonner";
 
 function getSourceIcon(kind: string, isPage?: boolean) {
@@ -151,7 +152,7 @@ function FolderCard({
           onClick={onOpen}
           className="w-full text-left">
           <Card
-            className={`h-full border-border bg-card/50 transition-all hover:-translate-y-0.5 hover:shadow-md ${
+            className={`h-full border-border/80 bg-card/50 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md ${
               isDragOver || isDropTarget ? "ring-2 ring-primary ring-offset-2" : ""
             }`}>
             <CardContent className="flex h-full flex-col gap-4 p-5">
@@ -286,7 +287,7 @@ function SourceCard({
   return (
     <>
       <div draggable onDragStart={handleDragStart} className="group relative">
-        <Card className="h-full border-border bg-card/50 transition-all hover:-translate-y-0.5 hover:shadow-md">
+        <Card className="h-full border-border/80 bg-card/50 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md">
           <CardContent className="flex h-full flex-col gap-4 p-5">
             <div className="flex items-center justify-between">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/50 text-muted-foreground">
@@ -586,6 +587,18 @@ function CreateDocumentDialog({ parentId }: { parentId: number | null }) {
   );
 }
 
+/** Keep `q` (and other params) when opening folders or returning to root. */
+function sourcesPathForFolder(targetFolderId: number | null): string {
+  const params = new URLSearchParams(window.location.search);
+  if (targetFolderId == null) {
+    params.delete("folder");
+  } else {
+    params.set("folder", String(targetFolderId));
+  }
+  const qs = params.toString();
+  return qs ? `/sources?${qs}` : "/sources";
+}
+
 export default function SourcesList() {
   const { data: sources, isLoading: sourcesLoading } = useListSources();
   const { data: pages, isLoading: pagesLoading } = useListPages();
@@ -813,7 +826,7 @@ export default function SourcesList() {
             <div className="mt-2 text-sm text-muted-foreground">
               The requested folder does not exist.
             </div>
-            <Button className="mt-4" onClick={() => setLocation("/sources")}>
+            <Button className="mt-4" onClick={() => setLocation(sourcesPathForFolder(null))}>
               Back to My Drive
             </Button>
           </CardContent>
@@ -824,72 +837,86 @@ export default function SourcesList() {
 
   return (
     <div
-      className="min-h-full bg-background/50"
+      className="min-h-full bg-gradient-to-b from-muted/30 via-background to-background"
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleRootDrop}>
       <div className="mx-auto max-w-7xl px-8 py-8 space-y-8 animate-in fade-in duration-500">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              {breadcrumbs.map((crumb, index) => (
-                <div
-                  key={`${crumb.id ?? "root"}-${index}`}
-                  className="flex items-center gap-2">
-                  {index > 0 ?
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  : null}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setLocation(
-                        crumb.id == null ?
-                          "/sources"
-                        : `/sources?folder=${crumb.id}`,
-                      )
-                    }
-                    className="hover:text-foreground transition-colors">
-                    {crumb.title}
-                  </button>
+        <div className="rounded-2xl border border-border/60 bg-card/30 p-6 shadow-sm backdrop-blur-sm sm:p-8">
+          <div className="flex flex-wrap items-start justify-between gap-6">
+            <div className="flex min-w-0 flex-1 gap-4">
+              <div className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/12 text-primary shadow-inner sm:flex">
+                <HardDrive className="h-7 w-7" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                  {breadcrumbs.map((crumb, index) => (
+                    <div
+                      key={`${crumb.id ?? "root"}-${index}`}
+                      className="flex items-center gap-2">
+                      {index > 0 ?
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                      : null}
+                      <button
+                        type="button"
+                        onClick={() => setLocation(sourcesPathForFolder(crumb.id))}
+                        className="truncate text-left hover:text-foreground transition-colors">
+                        {crumb.title}
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
+                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+                  {currentFolder ? currentFolder.title : "My Drive"}
+                </h1>
+                <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-muted-foreground">
+                  Organize folders, documents, and files in one library. Everything here can be
+                  searched and used in chat. Drag items to move them.
+                </p>
+              </div>
             </div>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight">
-              {currentFolder ? currentFolder.title : "My Drive"}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Folders and source files with search-ready content. Drag to organize.
-            </p>
+
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <CreateFolderDialog parentId={folderId} />
+              <CreateDocumentDialog parentId={folderId} />
+              <SourceCreateDialog
+                defaultParentPageId={folderId}
+                lockParentPageId
+                parentKinds={["folder"]}
+                titleText={
+                  currentFolder ?
+                    `Add source to ${currentFolder.title}`
+                  : "Add source to My Drive"
+                }
+                trigger={
+                  <Button>
+                    <Plus className="h-4 w-4 mr-1.5" /> Add File
+                  </Button>
+                }
+              />
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <CreateFolderDialog parentId={folderId} />
-            <CreateDocumentDialog parentId={folderId} />
-            <SourceCreateDialog
-              defaultParentPageId={folderId}
-              lockParentPageId
-              parentKinds={["folder"]}
-              titleText={
-                currentFolder ?
-                  `Add source to ${currentFolder.title}`
-                : "Add source to My Drive"
-              }
-              trigger={
-                <Button>
-                  <Plus className="h-4 w-4 mr-1.5" /> Add File
-                </Button>
-              }
-            />
+          <div className="mt-8 border-t border-border/50 pt-8">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Search workspace
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Full-text search across pages, sources, and chunks.
+            </p>
+            <div className="mt-4">
+              <WorkspaceSearchPanel />
+            </div>
           </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <Card className="border-border bg-card/50">
+          <Card className="border-border/80 bg-card/50 shadow-sm transition-shadow hover:shadow-md">
             <CardContent className="flex items-center gap-4 p-5">
               <div className="rounded-2xl bg-primary/10 p-3 text-primary">
                 <Folder className="h-5 w-5" />
               </div>
               <div>
-                <div className="text-2xl font-semibold">
+                <div className="text-2xl font-semibold tabular-nums">
                   {childFolders.length}
                 </div>
                 <div className="text-sm text-muted-foreground">
@@ -898,26 +925,26 @@ export default function SourcesList() {
               </div>
             </CardContent>
           </Card>
-          <Card className="border-border bg-card/50">
+          <Card className="border-border/80 bg-card/50 shadow-sm transition-shadow hover:shadow-md">
             <CardContent className="flex items-center gap-4 p-5">
               <div className="rounded-2xl bg-primary/10 p-3 text-primary">
                 <FileText className="h-5 w-5" />
               </div>
               <div>
-                <div className="text-2xl font-semibold">
+                <div className="text-2xl font-semibold tabular-nums">
                   {childDocuments.length}
                 </div>
                 <div className="text-sm text-muted-foreground">Documents</div>
               </div>
             </CardContent>
           </Card>
-          <Card className="border-border bg-card/50">
+          <Card className="border-border/80 bg-card/50 shadow-sm transition-shadow hover:shadow-md">
             <CardContent className="flex items-center gap-4 p-5">
               <div className="rounded-2xl bg-primary/10 p-3 text-primary">
                 <Database className="h-5 w-5" />
               </div>
               <div>
-                <div className="text-2xl font-semibold">
+                <div className="text-2xl font-semibold tabular-nums">
                   {childFiles.length}
                 </div>
                 <div className="text-sm text-muted-foreground">Files</div>
@@ -933,14 +960,17 @@ export default function SourcesList() {
             ))}
           </div>
         : childFolders.length === 0 && childDocuments.length === 0 && childFiles.length === 0 ?
-          <Card className="border-dashed border-border bg-card/50">
+          <Card className="border-dashed border-border/80 bg-card/40 shadow-sm">
             <CardContent className="py-16 text-center">
-              <Database className="mx-auto mb-4 h-10 w-10 text-muted-foreground/40" />
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/60 text-muted-foreground">
+                <HardDrive className="h-7 w-7 opacity-70" />
+              </div>
               <div className="text-xl font-medium">
                 {currentFolder ? "This folder is empty" : "Your drive is empty"}
               </div>
-              <div className="mt-2 text-sm text-muted-foreground">
-                Create folders, documents, and upload files to organize your library.
+              <div className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+                Create folders, documents, and upload files. Use search above to find content anywhere
+                in your workspace.
               </div>
             </CardContent>
           </Card>
@@ -955,7 +985,7 @@ export default function SourcesList() {
                     <FolderCard
                       key={folder.id}
                       folder={folder}
-                      onOpen={() => setLocation(`/sources?folder=${folder.id}`)}
+                      onOpen={() => setLocation(sourcesPathForFolder(folder.id))}
                       onDrop={(item) => handleFolderDrop(folder.id, item)}
                       onRename={(newTitle) => handleFolderRename(folder.id, newTitle)}
                       onDelete={() => handleFolderDelete(folder.id)}

@@ -36,29 +36,36 @@ async function collectDescendantPageIds(rootId: number): Promise<number[]> {
   return result;
 }
 
-router.get("/pages", async (_req, res) => {
+router.get("/pages", async (req, res) => {
+  const user = (req as any).user;
   const rows = await db
     .select()
     .from(pagesTable)
+    .where(eq(pagesTable.userId, user.id))
     .orderBy(asc(pagesTable.position), asc(pagesTable.id));
   res.json(rows);
 });
 
 router.post("/pages", async (req, res) => {
   const body = CreatePageBody.parse(req.body);
+  const user = (req as any).user;
   const [maxRow] = await db
     .select({ maxPos: sql<number>`coalesce(max(${pagesTable.position}), -1)` })
     .from(pagesTable)
     .where(
-      body.parentId == null
-        ? sql`${pagesTable.parentId} IS NULL`
-        : eq(pagesTable.parentId, body.parentId),
+      and(
+        eq(pagesTable.userId, user.id),
+        body.parentId == null
+          ? sql`${pagesTable.parentId} IS NULL`
+          : eq(pagesTable.parentId, body.parentId)
+      )
     );
   const nextPos = (maxRow?.maxPos ?? -1) + 1;
 
   const [created] = await db
     .insert(pagesTable)
     .values({
+      userId: user.id,
       kind: body.kind ?? "page",
       title: body.title,
       emoji: body.emoji ?? null,

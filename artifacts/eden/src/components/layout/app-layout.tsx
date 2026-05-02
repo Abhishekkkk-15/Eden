@@ -2,7 +2,6 @@ import { ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { 
   Home, 
-  Search, 
   Database, 
   MessageSquare, 
   Bot, 
@@ -46,7 +45,6 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const navItems = [
     { icon: Home, label: "Home", href: "/" },
-    { icon: Search, label: "Search", href: "/search" },
     { icon: Database, label: "Sources", href: "/sources" },
     { icon: MessageSquare, label: "Chat", href: "/chat" },
     { icon: Bot, label: "Agents", href: "/agents" },
@@ -69,7 +67,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="px-3 mb-4 space-y-1">
             {navItems.map((item) => (
               <Link key={item.href} href={item.href}>
-                <div className={`flex items-center gap-3 px-2 py-1.5 rounded-md text-sm cursor-pointer transition-colors ${location === item.href ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}>
+                <div className={`flex items-center gap-3 px-2 py-1.5 rounded-md text-sm cursor-pointer transition-colors ${location === item.href || (item.href === "/sources" && location.startsWith("/sources")) ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}>
                   <item.icon className="w-4 h-4" />
                   {item.label}
                 </div>
@@ -83,7 +81,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="flex items-center gap-2 justify-center text-xs text-sidebar-foreground/50">
             <kbd className="bg-sidebar-accent px-1.5 py-0.5 rounded border border-sidebar-border shadow-sm">⌘</kbd>
             <kbd className="bg-sidebar-accent px-1.5 py-0.5 rounded border border-sidebar-border shadow-sm">K</kbd>
-            <span>to search</span>
+            <span>command palette</span>
           </div>
           
           <button 
