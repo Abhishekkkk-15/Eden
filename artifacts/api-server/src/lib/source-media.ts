@@ -1,7 +1,7 @@
 import { mkdir, writeFile, unlink, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { transcribeAudio } from "@workspace/integrations-nvidia-nim-ai-server";
+import { transcribeAudio } from "@workspace/integrations-groq-ai-server";
 import { describeImageDataUrl, summarize } from "./ai";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -137,7 +137,8 @@ export async function extractImageContent(opts: {
       content,
       summary: await summarize(content),
     };
-  } catch {
+  } catch (err) {
+    console.error("extractImageContent failed:", err);
     const fallbackParts = [
       `Image source titled "${opts.title}".`,
       opts.originalFilename ? `Original filename: ${opts.originalFilename}.` : null,
@@ -166,7 +167,6 @@ export async function extractVideoContent(opts: {
     const { text } = await transcribeAudio(
       opts.buffer,
       opts.originalFilename ?? undefined,
-      "whisper-large-v3",
     );
     const content = text.trim();
     if (!content) {

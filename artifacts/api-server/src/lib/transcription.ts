@@ -2,23 +2,22 @@ import { db, sourcesTable, transcriptionsTable, sourceChunksTable } from "@works
 import { eq, ilike } from "drizzle-orm";
 import {
   transcribeAudio,
-  type NIMModel,
-} from "@workspace/integrations-nvidia-nim-ai-server";
+} from "@workspace/integrations-groq-ai-server";
 import { readFile } from "fs/promises";
 import { join } from "path";
 import { getUploadsDir } from "./source-media";
 import { chunkText } from "./rag";
 
 /**
- * Transcribe audio or video file using Whisper
+ * Transcribe audio or video file using Groq Whisper
  */
 export async function transcribeAudioVideo(sourceId: number, mediaPath: string): Promise<string> {
   try {
     const fullPath = join(getUploadsDir(), mediaPath);
     const audioBuffer = await readFile(fullPath);
     
-    // Transcribe using NVIDIA NIM free endpoint (whisper-large-v3)
-    const { text: transcription, model } = await transcribeAudio(audioBuffer, mediaPath, "whisper-large-v3");
+    // Transcribe using Groq (whisper-large-v3)
+    const { text: transcription, model } = await transcribeAudio(audioBuffer, mediaPath);
     
     // Store in database
     await db.insert(transcriptionsTable).values({

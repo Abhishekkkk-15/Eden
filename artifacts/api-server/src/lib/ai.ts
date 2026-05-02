@@ -1,13 +1,33 @@
-import { openai } from "@workspace/integrations-openai-ai-server";
+import OpenAI from "openai";
+import { openai as nvidiaClient } from "@workspace/integrations-openai-ai-server";
 
-export const CHAT_MODEL = "gpt-5.4";
+let groqClientInstance: OpenAI | null = null;
+
+function getGroqClient() {
+  if (groqClientInstance) return groqClientInstance;
+  const apiKey = process.env.AI_INTEGRATIONS_GROQ_API_KEY;
+  if (!apiKey || apiKey === "gsk_your_key_here") {
+    throw new Error("AI_INTEGRATIONS_GROQ_API_KEY is not set.");
+  }
+  groqClientInstance = new OpenAI({
+    apiKey,
+    baseURL: "https://api.groq.com/openai/v1",
+  });
+  return groqClientInstance;
+}
+
+// Groq models for text
+export const CHAT_MODEL = "llama-3.3-70b-versatile";
+// NVIDIA NIM model for vision (since Groq account lacks vision access)
+export const VISION_MODEL = "meta/llama-3.2-11b-vision-instruct";
 
 export async function completeText(opts: {
   system: string;
   user: string;
   maxTokens?: number;
 }): Promise<string> {
-  const res = await openai.chat.completions.create({
+  const client = getGroqClient();
+  const res = await client.chat.completions.create({
     model: CHAT_MODEL,
     max_completion_tokens: opts.maxTokens ?? 8192,
     messages: [
@@ -19,7 +39,8 @@ export async function completeText(opts: {
 }
 
 export async function* streamChat(messages: Array<{ role: "system" | "user" | "assistant"; content: string }>): AsyncGenerator<string> {
-  const stream = await openai.chat.completions.create({
+  const client = getGroqClient();
+  const stream = await client.chat.completions.create({
     model: CHAT_MODEL,
     max_completion_tokens: 8192,
     stream: true,
@@ -43,9 +64,10 @@ export async function summarize(text: string): Promise<string> {
 }
 
 export async function describeImageDataUrl(dataUrl: string): Promise<string> {
-  const res = await openai.chat.completions.create({
-    model: CHAT_MODEL,
-    max_completion_tokens: 800,
+  // Use NVIDIA NIM for Vision
+  const res = await nvidiaClient.chat.completions.create({
+    model: VISION_MODEL,
+    max_completion_tokens: 4096,
     messages: [
       {
         role: "user",
@@ -53,7 +75,7 @@ export async function describeImageDataUrl(dataUrl: string): Promise<string> {
           {
             type: "text",
             text:
-              "Describe this image for workspace search. Include visible text, entities, scenes, objects, and any facts a user may later search for. Reply in plain text only.",
+              "Provide a complete, exhaustive, and verbatim transcription of all visible text in this image. Do not provide a brief description or summarize the text. In addition to the full transcription, include a detailed description of all entities, scenes, objects, and any facts a user may later search for. Reply in plain text only.",
           },
           {
             type: "image_url",

@@ -15,6 +15,12 @@
     },
     {
       "path": "../../lib/integrations-openai-ai-server"
+    },
+    {
+      "path": "../../lib/integrations-nvidia-nim-ai-server"
+    },
+    {
+      "path": "../../lib/integrations-groq-ai-server"
     }
   ]
 }
