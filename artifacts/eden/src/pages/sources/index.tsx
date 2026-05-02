@@ -53,6 +53,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SourceCreateDialog } from "@/components/sources/source-create-dialog";
 import { WorkspaceSearchPanel } from "@/components/sources/workspace-search-panel";
+import { PhotoFolder, type FolderItem } from "@/components/PhotoFolder";
 import { toast } from "sonner";
 
 function getSourceIcon(kind: string, isPage?: boolean) {
@@ -87,6 +88,7 @@ function FolderCard({
   onDragStart,
   onDragEnd,
   previewItems,
+  folderSources,
 }: {
   folder: Page;
   onOpen: () => void;
@@ -98,6 +100,7 @@ function FolderCard({
   onDragStart: () => void;
   onDragEnd: () => void;
   previewItems: FolderPreviewItem[];
+  folderSources: SourceWithPage[];
 }) {
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -144,91 +147,66 @@ function FolderCard({
     }
   };
 
+  // Convert sources to folder items for display
+  const folderItems: FolderItem[] = useMemo(() => {
+    return folderSources.slice(0, 4).map((source) => {
+      // Map source kind to FolderItem kind
+      let kind: FolderItem["kind"] = "file";
+      if (source.isPage) {
+        kind = "document";
+      } else if (source.kind === "image") {
+        kind = "image";
+      } else if (source.kind === "video") {
+        kind = "video";
+      } else if (source.kind === "youtube") {
+        kind = "youtube";
+      } else if (source.kind === "url") {
+        kind = "url";
+      } else if (source.kind === "audio") {
+        kind = "audio";
+      } else if (source.kind === "text") {
+        kind = "text";
+      }
+
+      // Get thumbnail URL for images/videos/youtube
+      let thumbnailUrl: string | null = null;
+      if (source.kind === "image" && source.mediaUrl) {
+        thumbnailUrl = source.mediaUrl;
+      } else if (source.kind === "youtube" && source.embedUrl) {
+        // Extract YouTube video ID and use standard thumbnail
+        const match = source.embedUrl.match(/[?&]v=([^&]+)/);
+        if (match) {
+          thumbnailUrl = `https://img.youtube.com/vi/${match[1]}/mqdefault.jpg`;
+        }
+      }
+
+      return {
+        id: source.id,
+        title: source.title,
+        kind,
+        thumbnailUrl,
+      };
+    });
+  }, [folderSources]);
+
   return (
     <>
-      <div
+      <PhotoFolder
+        items={folderItems}
+        title={folder.title}
+        emoji={folder.emoji}
+        onClick={onOpen}
+        onRename={() => setIsRenameOpen(true)}
+        onDelete={() => setIsDeleteOpen(true)}
+        isDragging={isDragging}
+        isDropTarget={isDropTarget || isDragOver}
         draggable
         onDragStart={handleDragStart}
         onDragEnd={onDragEnd}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`group relative ${isDragging ? "opacity-50" : ""}`}>
-        <button
-          type="button"
-          onClick={onOpen}
-          className="w-full text-left">
-          <Card
-            className={`h-full border-border/80 bg-card/50 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md ${
-              isDragOver || isDropTarget ? "ring-2 ring-primary ring-offset-2" : ""
-            }`}>
-            <CardContent className="flex h-full flex-col gap-4 p-5">
-              <div className="flex items-center justify-between">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                  <Folder className="h-6 w-6" />
-                </div>
-                <div className="flex items-center gap-1">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => e.stopPropagation()}>
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsRenameOpen(true);
-                        }}>
-                        <Pencil className="h-4 w-4 mr-2" />
-                        Rename
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsDeleteOpen(true);
-                        }}>
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                </div>
-              </div>
-              <div>
-                <div className="truncate font-medium text-foreground">
-                  {folder.emoji ? `${folder.emoji} ` : ""}
-                  {folder.title}
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">Folder</div>
-              </div>
-              <div className="overflow-hidden">
-                <div className="max-h-0 space-y-1 opacity-0 transition-all duration-300 ease-out group-hover:max-h-24 group-hover:opacity-100">
-                  {previewItems.length > 0 ?
-                    previewItems.slice(0, 4).map((item, i) => (
-                      <div
-                        key={`${item.kind}-${item.id}`}
-                        className="truncate rounded-md border border-border/70 bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground"
-                        style={{ transitionDelay: `${i * 35}ms` }}>
-                        <span className="mr-1 uppercase tracking-wide text-[10px] opacity-80">
-                          {item.kind === "document" ? "Doc" : "File"}
-                        </span>
-                        {item.title}
-                      </div>
-                    ))
-                  : <div className="text-[11px] text-muted-foreground/80">No files yet</div>}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </button>
-      </div>
+      />
 
       <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
         <DialogContent>
@@ -693,6 +671,16 @@ export default function SourcesList() {
     return map;
   }, [folderPages, sourceList]);
 
+  const folderSourcesMap = useMemo(() => {
+    const map = new Map<number, SourceWithPage[]>();
+    const all = sourceList as SourceWithPage[];
+    for (const folder of folderPages) {
+      const sources = all.filter((item) => (item.parentPageId ?? null) === folder.id);
+      map.set(folder.id, sources);
+    }
+    return map;
+  }, [folderPages, sourceList]);
+
   // Separate documents (pages) and files (sources)
   const childDocuments = useMemo(
     () => childItems.filter((item: SourceWithPage) => item.isPage),
@@ -1041,6 +1029,7 @@ export default function SourcesList() {
                         setDropTargetId(null);
                       }}
                       previewItems={folderPreviewMap.get(folder.id) ?? []}
+                      folderSources={folderSourcesMap.get(folder.id) ?? []}
                     />
                   ))}
                 </div>
