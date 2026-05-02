@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { ChatWorkspacePicker } from "@/components/chat/chat-workspace-picker";
 import {
   attachmentFromContextItem,
@@ -32,7 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Send, FileText, Database, Sparkles, FolderOpen, Trash2, Paperclip, X } from "lucide-react";
+import { Send, FileText, Database, Sparkles, FolderOpen, Trash2, Paperclip, X, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 
 function chatPostHeaders(): HeadersInit {
@@ -49,6 +50,8 @@ interface PendingMessage {
   citations: Citation[];
 }
 
+type ChatMode = "default" | "repurpose";
+
 export default function ChatDetail({ params }: { params: { id: string } }) {
   const id = Number(params.id);
   const queryClient = useQueryClient();
@@ -62,6 +65,7 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [composerDragOver, setComposerDragOver] = useState(false);
+  const [chatMode, setChatMode] = useState<ChatMode>("default");
   const [, navigate] = useLocation();
   const scrollerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -122,6 +126,7 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
         headers: chatPostHeaders(),
         body: JSON.stringify({
           content,
+          chatMode,
           ...(contextPayload.length > 0 ?
             {
               contextItems: attachments.map((a) => ({
@@ -298,6 +303,10 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
                 </Link>{" "}
                 into the box below, or use Add — then ask for summaries, plans, or next steps.
               </p>
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/40 px-3 py-1 text-[11px]">
+                <WandSparkles className="h-3.5 w-3.5 text-primary" />
+                Tip: switch to Repurpose Studio for multi-platform outputs.
+              </div>
             </div>
           )}
 
@@ -378,6 +387,29 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
               </div>
             : null}
             <div className="flex gap-2 items-end">
+              <div className="mb-0.5 flex shrink-0 items-center gap-1 rounded-lg border border-border/70 bg-background/80 p-1">
+                <button
+                  type="button"
+                  onClick={() => setChatMode("default")}
+                  className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
+                    chatMode === "default" ?
+                      "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                  }`}>
+                  Chat
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChatMode("repurpose")}
+                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs transition-colors ${
+                    chatMode === "repurpose" ?
+                      "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                  }`}>
+                  <WandSparkles className="h-3 w-3" />
+                  Repurpose
+                </button>
+              </div>
               <Button
                 type="button"
                 variant="outline"
@@ -421,6 +453,8 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
                 "Drop folder or file here…"
               : streaming ?
                 "Eden is thinking…"
+              : chatMode === "repurpose" ?
+                "Repurpose Studio is on. Ask for threads, scripts, carousels, newsletters, and CTAs."
               : "Press Enter to send. Drag from My Drive or use the clip to attach."}
             </p>
           </div>
@@ -469,23 +503,36 @@ function CitationReferences({
   const files = citations.filter((c) => c.kind === "source");
 
   const row = (c: Citation, i: number) => (
-    <button
-      key={`${c.kind}-${c.refId}-${i}`}
-      type="button"
-      onClick={() => onCitationClick(c)}
-      className="w-full rounded-xl border border-border/80 bg-background/60 px-3 py-2 text-left transition-colors hover:border-primary/30 hover:bg-accent/40">
-      <div className="flex items-center gap-2">
-        {c.kind === "page" ?
-          <FileText className="h-3.5 w-3.5 shrink-0 text-primary" />
-        : <Database className="h-3.5 w-3.5 shrink-0 text-primary" />}
-        <span className="text-sm font-medium leading-tight text-foreground">{c.title}</span>
-      </div>
-      {c.snippet ?
-        <p className="mt-1.5 pl-[22px] text-xs leading-snug text-muted-foreground line-clamp-2">
-          {c.snippet.replace(/[<>]/g, "")}
+    <HoverCard key={`${c.kind}-${c.refId}-${i}`} openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          onClick={() => onCitationClick(c)}
+          className="w-full rounded-xl border border-border/80 bg-background/60 px-3 py-2 text-left transition-colors hover:border-primary/30 hover:bg-accent/40">
+          <div className="flex items-center gap-2">
+            {c.kind === "page" ?
+              <FileText className="h-3.5 w-3.5 shrink-0 text-primary" />
+            : <Database className="h-3.5 w-3.5 shrink-0 text-primary" />}
+            <span className="text-sm font-medium leading-tight text-foreground">{c.title}</span>
+          </div>
+          {c.snippet ?
+            <p className="mt-1.5 pl-[22px] text-xs leading-snug text-muted-foreground line-clamp-2">
+              {c.snippet.replace(/[<>]/g, "")}
+            </p>
+          : null}
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent align="start" className="w-[360px] space-y-2">
+        <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+          {c.kind === "page" ? <FileText className="h-3.5 w-3.5 text-primary" /> : <Database className="h-3.5 w-3.5 text-primary" />}
+          <span className="truncate">{c.title}</span>
+        </div>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {c.snippet?.replace(/[<>]/g, "") || "No preview available."}
         </p>
-      : null}
-    </button>
+        <p className="text-[11px] text-muted-foreground">Click to open this source</p>
+      </HoverCardContent>
+    </HoverCard>
   );
 
   return (

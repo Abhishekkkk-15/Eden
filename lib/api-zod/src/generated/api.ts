@@ -345,6 +345,7 @@ export const SendMessageParams = zod.object({
 
 export const SendMessageBody = zod.object({
   "content": zod.string(),
+  "chatMode": zod.enum(['default', 'repurpose']).optional().describe('Optional assistant mode. `repurpose` enables structured multi-format output for creators.'),
   "contextItems": zod.array(zod.object({
   "type": zod.enum(['source', 'page', 'folder']),
   "id": zod.number(),

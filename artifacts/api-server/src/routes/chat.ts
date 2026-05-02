@@ -185,6 +185,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
   try {
     const pinned = body.contextItems ?? [];
     const hasPinned = pinned.length > 0;
+    const chatMode = body.chatMode ?? "default";
 
     let contextText = "";
     if (hasPinned) {
@@ -213,7 +214,13 @@ router.post("/conversations/:id/messages", async (req, res) => {
       "You are Eden, a calm and precise AI assistant for a personal knowledge workspace. Answer clearly and concisely. When you use the workspace context (pages or uploaded files/sources), reference it naturally and do not invent facts. If the user asks what files or documents are relevant, list them using the context titles.";
     const pinnedSystem =
       "You are Eden, a calm and precise AI assistant for a personal knowledge workspace. The user has **pinned** specific files, documents, or folders for this message — treat that material as the primary source of truth. When they ask for plans, roadmaps, timelines, milestones, checklists, summaries, or comparisons, respond with clear structure (sections, numbered steps, bullets). Stay grounded in the pinned context; if something is not specified there, say so. Do not invent facts.";
-    const baseSystem = agentPrompt ?? (hasPinned ? pinnedSystem : defaultSystem);
+    const repurposeSystem =
+      "You are Eden Repurposing Studio for content creators. Transform source material into polished multi-platform outputs. Always provide: 1) Key angle (1-2 lines), 2) Platform outputs (YouTube, X/Twitter thread, LinkedIn, Instagram carousel, Newsletter), 3) CTA options, 4) Reuse checklist. Keep outputs practical, audience-aware, and concise. If context is missing, state assumptions clearly.";
+    const modeSystem =
+      chatMode === "repurpose" ? repurposeSystem
+      : hasPinned ? pinnedSystem
+      : defaultSystem;
+    const baseSystem = agentPrompt ?? modeSystem;
     const system = contextText
       ? `${baseSystem}\n\nUse the following workspace context when relevant. If the answer is not present, say what you do know and suggest what to look for next.\n\n--- WORKSPACE CONTEXT ---\n${contextText}\n--- END CONTEXT ---`
       : baseSystem;

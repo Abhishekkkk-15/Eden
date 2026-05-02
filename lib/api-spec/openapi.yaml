@@ -730,6 +730,11 @@ components:
       type: object
       properties:
         content: { type: string }
+        chatMode:
+          type: string
+          enum: [default, repurpose]
+          description: >-
+            Optional assistant mode. `repurpose` enables structured multi-format output for creators.
         contextItems:
           type: array
           items:

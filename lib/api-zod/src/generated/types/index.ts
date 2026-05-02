@@ -39,6 +39,7 @@ export * from './searchResult';
 export * from './searchResultKind';
 export * from './searchWorkspaceParams';
 export * from './sendMessageInput';
+export * from './sendMessageInputChatMode';
 export * from './source';
 export * from './sourceChunk';
 export * from './sourceKind';

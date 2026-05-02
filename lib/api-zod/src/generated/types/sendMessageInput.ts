@@ -6,9 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChatContextItem } from './chatContextItem';
+import type { SendMessageInputChatMode } from './sendMessageInputChatMode';
 
 export interface SendMessageInput {
   content: string;
+  /** Optional assistant mode. `repurpose` enables structured multi-format output for creators. */
+  chatMode?: SendMessageInputChatMode;
   /** When set, the model prioritizes these items (your files/folders). Drag them from Sources into chat. */
   contextItems?: ChatContextItem[];
 }

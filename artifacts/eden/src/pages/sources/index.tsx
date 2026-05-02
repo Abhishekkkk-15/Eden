@@ -74,6 +74,7 @@ function getSourceIcon(kind: string, isPage?: boolean) {
 type DragItem = { type: "folder"; id: number } | { type: "source"; id: number; isPage?: boolean };
 
 type SourceWithPage = Source & { isPage?: boolean };
+type FolderPreviewItem = { id: number; title: string; kind: "document" | "file" };
 
 function FolderCard({
   folder,
@@ -85,6 +86,7 @@ function FolderCard({
   isDropTarget,
   onDragStart,
   onDragEnd,
+  previewItems,
 }: {
   folder: Page;
   onOpen: () => void;
@@ -95,6 +97,7 @@ function FolderCard({
   isDropTarget: boolean;
   onDragStart: () => void;
   onDragEnd: () => void;
+  previewItems: FolderPreviewItem[];
 }) {
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -204,6 +207,23 @@ function FolderCard({
                   {folder.title}
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">Folder</div>
+              </div>
+              <div className="overflow-hidden">
+                <div className="max-h-0 space-y-1 opacity-0 transition-all duration-300 ease-out group-hover:max-h-24 group-hover:opacity-100">
+                  {previewItems.length > 0 ?
+                    previewItems.slice(0, 4).map((item, i) => (
+                      <div
+                        key={`${item.kind}-${item.id}`}
+                        className="truncate rounded-md border border-border/70 bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground"
+                        style={{ transitionDelay: `${i * 35}ms` }}>
+                        <span className="mr-1 uppercase tracking-wide text-[10px] opacity-80">
+                          {item.kind === "document" ? "Doc" : "File"}
+                        </span>
+                        {item.title}
+                      </div>
+                    ))
+                  : <div className="text-[11px] text-muted-foreground/80">No files yet</div>}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -656,6 +676,23 @@ export default function SourcesList() {
     [folderId, sourceList],
   );
 
+  const folderPreviewMap = useMemo(() => {
+    const map = new Map<number, FolderPreviewItem[]>();
+    const all = sourceList as SourceWithPage[];
+    for (const folder of folderPages) {
+      const previews = all
+        .filter((item) => (item.parentPageId ?? null) === folder.id)
+        .slice(0, 4)
+        .map((item) => ({
+          id: item.id,
+          title: item.title,
+          kind: item.isPage ? ("document" as const) : ("file" as const),
+        }));
+      map.set(folder.id, previews);
+    }
+    return map;
+  }, [folderPages, sourceList]);
+
   // Separate documents (pages) and files (sources)
   const childDocuments = useMemo(
     () => childItems.filter((item: SourceWithPage) => item.isPage),
@@ -1003,6 +1040,7 @@ export default function SourcesList() {
                         setDraggingId(null);
                         setDropTargetId(null);
                       }}
+                      previewItems={folderPreviewMap.get(folder.id) ?? []}
                     />
                   ))}
                 </div>

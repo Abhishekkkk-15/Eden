@@ -331,8 +331,21 @@ export interface CreateConversationInput {
   agentId?: number | null;
 }
 
+/**
+ * Optional assistant mode. `repurpose` enables structured multi-format output for creators.
+ */
+export type SendMessageInputChatMode = typeof SendMessageInputChatMode[keyof typeof SendMessageInputChatMode];
+
+
+export const SendMessageInputChatMode = {
+  default: 'default',
+  repurpose: 'repurpose',
+} as const;
+
 export interface SendMessageInput {
   content: string;
+  /** Optional assistant mode. `repurpose` enables structured multi-format output for creators. */
+  chatMode?: SendMessageInputChatMode;
   /** When set, the model prioritizes these items (your files/folders). Drag them from Sources into chat. */
   contextItems?: ChatContextItem[];
 }
