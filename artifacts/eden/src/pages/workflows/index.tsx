@@ -1,6 +1,14 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  useWorkflows,
+  useCreateWorkflow,
+  useUpdateWorkflow,
+  useDeleteWorkflow,
+  useRunWorkflow,
+  type Workflow,
+} from "@/hooks/use-workflows";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -150,22 +158,40 @@ const sampleWorkflows: Workflow[] = [
 ];
 
 export default function WorkflowsList() {
-  const [workflows, setWorkflows] = useState<Workflow[]>(sampleWorkflows);
+  const { data: workflows, isLoading } = useWorkflows();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null);
 
-  const toggleWorkflow = (id: number) => {
-    setWorkflows((prev) =>
-      prev.map((w) =>
-        w.id === id ? { ...w, isActive: !w.isActive } : w
-      )
-    );
-    toast.success("Workflow updated");
+  const createWorkflow = useCreateWorkflow();
+  const updateWorkflow = useUpdateWorkflow();
+  const deleteWorkflow = useDeleteWorkflow();
+  const runWorkflow = useRunWorkflow();
+
+  const handleToggleWorkflow = async (id: number, currentActive: boolean) => {
+    try {
+      await updateWorkflow.mutateAsync({ id, data: { isActive: !currentActive } });
+      toast.success("Workflow updated");
+    } catch {
+      toast.error("Failed to update workflow");
+    }
   };
 
-  const deleteWorkflow = (id: number) => {
-    setWorkflows((prev) => prev.filter((w) => w.id !== id));
-    toast.success("Workflow deleted");
+  const handleDeleteWorkflow = async (id: number) => {
+    try {
+      await deleteWorkflow.mutateAsync(id);
+      toast.success("Workflow deleted");
+    } catch {
+      toast.error("Failed to delete workflow");
+    }
+  };
+
+  const handleRunWorkflow = async (id: number) => {
+    try {
+      await runWorkflow.mutateAsync(id);
+      toast.success("Workflow started");
+    } catch {
+      toast.error("Failed to run workflow");
+    }
   };
 
   return (
@@ -184,13 +210,20 @@ export default function WorkflowsList() {
       </div>
 
       {/* Workflow Grid */}
+      {isLoading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="h-40 animate-pulse bg-muted" />
+          ))}
+        </div>
+      ) : (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {workflows.map((workflow, index) => (
+        {workflows?.map((workflow, index) => (
           <motion.div
             key={workflow.id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
+            transition={{ delay: index * 0.1 }} 
           >
             <Card
               className={cn(
@@ -214,9 +247,8 @@ export default function WorkflowsList() {
                   </div>
                   <Switch
                     checked={workflow.isActive}
-                    onCheckedChange={(e) => {
-                      e.stopPropagation();
-                      toggleWorkflow(workflow.id);
+                      onCheckedChange={(checked) => {
+                      handleToggleWorkflow(workflow.id, workflow.isActive);
                     }}
                   />
                 </div>
@@ -256,8 +288,9 @@ export default function WorkflowsList() {
           </motion.div>
         ))}
       </div>
+      )}
 
-      {workflows.length === 0 && (
+      {!isLoading && workflows?.length === 0 && (
         <div className="text-center py-16 border border-dashed rounded-lg">
           <Zap className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
           <h3 className="text-lg font-medium">No workflows yet</h3>
@@ -281,13 +314,14 @@ export default function WorkflowsList() {
           </DialogHeader>
 
           <WorkflowBuilder
-            onSave={(workflow) => {
-              setWorkflows((prev) => [
-                ...prev,
-                { ...workflow, id: Date.now(), runCount: 0, createdAt: new Date().toISOString() },
-              ]);
-              setIsCreateOpen(false);
-              toast.success("Workflow created");
+            onSave={async (workflow) => {
+              try {
+                await createWorkflow.mutateAsync(workflow);
+                setIsCreateOpen(false);
+                toast.success("Workflow created");
+              } catch {
+                toast.error("Failed to create workflow");
+              }
             }}
             onCancel={() => setIsCreateOpen(false)}
           />
@@ -303,15 +337,21 @@ export default function WorkflowsList() {
           {editingWorkflow && (
             <WorkflowBuilder
               initialWorkflow={editingWorkflow}
-              onSave={(updated) => {
-                setWorkflows((prev) =>
-                  prev.map((w) => (w.id === editingWorkflow.id ? { ...updated, id: w.id } : w))
-                );
-                setEditingWorkflow(null);
-                toast.success("Workflow updated");
+              onSave={async (updated) => {
+                try {
+                  await updateWorkflow.mutateAsync({
+                    id: editingWorkflow.id,
+                    data: updated,
+                  });
+                  setEditingWorkflow(null);
+                  toast.success("Workflow updated");
+                } catch {
+                  toast.error("Failed to update workflow");
+                }
               }}
               onCancel={() => setEditingWorkflow(null)}
-              onDelete={() => deleteWorkflow(editingWorkflow.id)}
+              onDelete={() => handleDeleteWorkflow(editingWorkflow.id)}
+              onRun={() => handleRunWorkflow(editingWorkflow.id)}
             />
           )}
         </DialogContent>
@@ -326,9 +366,10 @@ interface WorkflowBuilderProps {
   onSave: (workflow: Omit<Workflow, "id" | "runCount" | "createdAt">) => void;
   onCancel: () => void;
   onDelete?: () => void;
+  onRun?: () => void;
 }
 
-function WorkflowBuilder({ initialWorkflow, onSave, onCancel, onDelete }: WorkflowBuilderProps) {
+function WorkflowBuilder({ initialWorkflow, onSave, onCancel, onDelete, onRun }: WorkflowBuilderProps) {
   const [name, setName] = useState(initialWorkflow?.name ?? "");
   const [description, setDescription] = useState(initialWorkflow?.description ?? "");
   const [emoji, setEmoji] = useState(initialWorkflow?.emoji ?? "🤖");
@@ -522,10 +563,15 @@ function WorkflowBuilder({ initialWorkflow, onSave, onCancel, onDelete }: Workfl
       </ScrollArea>
 
       <div className="p-6 border-t flex justify-between">
-        <div>
+        <div className="flex gap-2">
           {onDelete && (
             <Button variant="destructive" onClick={onDelete}>
               <Trash2 className="w-4 h-4 mr-2" /> Delete
+            </Button>
+          )}
+          {onRun && step === 3 && (
+            <Button variant="outline" onClick={onRun}>
+              <Play className="w-4 h-4 mr-2" /> Run Now
             </Button>
           )}
         </div>
@@ -544,7 +590,7 @@ function WorkflowBuilder({ initialWorkflow, onSave, onCancel, onDelete }: Workfl
             </Button>
           ) : (
             <Button onClick={handleSave}>
-              <Zap className="w-4 h-4 mr-2" /> Create Workflow
+              <Zap className="w-4 h-4 mr-2" /> {initialWorkflow ? "Save Workflow" : "Create Workflow"}
             </Button>
           )}
         </div>
