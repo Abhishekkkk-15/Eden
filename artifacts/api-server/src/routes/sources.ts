@@ -21,6 +21,7 @@ import {
   removeUploadedFile,
 } from "../lib/source-media";
 import { transcribeSource } from "../lib/transcription";
+import { triggerWorkflows } from "./workflows";
 import { NodeHtmlMarkdown } from "node-html-markdown";
 
 const router: IRouter = Router();
@@ -305,6 +306,12 @@ router.post("/sources", async (req, res) => {
             })),
           );
         }
+      });
+
+      // Trigger workflows for this source
+      void triggerWorkflows("source_created", pending.id, user.id, {
+        kind: body.kind,
+        parentPageId: body.parentPageId ?? null,
       });
     } catch (err) {
       req.log.error({ err, sourceId: pending.id }, "source ingestion failed");

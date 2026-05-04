@@ -262,4 +262,54 @@ router.post("/conversations/:id/messages", async (req, res) => {
   res.end();
 });
 
+// POST /chat/stream - Stream chat completion without conversation
+router.post("/chat/stream", async (req, res) => {
+  const { messages } = req.body as { messages: Array<{ role: "system" | "user" | "assistant"; content: string }> };
+  const user = (req as any).user;
+
+  if (!messages || !Array.isArray(messages)) {
+    res.status(400).json({ error: "messages array is required" });
+    return;
+  }
+
+  res.setHeader("Content-Type", "text/plain");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  try {
+    for await (const chunk of streamChat(messages)) {
+      res.write(chunk);
+    }
+  } catch (err) {
+    req.log.error({ err }, "chat stream failed");
+    res.write("Error: Failed to generate response");
+  }
+
+  res.end();
+});
+
+// POST /chat/complete - Non-streaming chat completion
+router.post("/chat/complete", async (req, res) => {
+  const { messages } = req.body as { messages: Array<{ role: "system" | "user" | "assistant"; content: string }> };
+  const user = (req as any).user;
+
+  if (!messages || !Array.isArray(messages)) {
+    res.status(400).json({ error: "messages array is required" });
+    return;
+  }
+
+  try {
+    let content = "";
+    for await (const chunk of streamChat(messages)) {
+      content += chunk;
+    }
+    res.json({ content });
+  } catch (err) {
+    req.log.error({ err }, "chat completion failed");
+    res.status(500).json({ error: "Failed to generate response" });
+  }
+});
+
 export default router;

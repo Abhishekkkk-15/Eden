@@ -30,6 +30,7 @@ import {
   Pencil,
   Trash2,
   FolderOpen,
+  CheckSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -54,7 +55,12 @@ import {
 import { SourceCreateDialog } from "@/components/sources/source-create-dialog";
 import { WorkspaceSearchPanel } from "@/components/sources/workspace-search-panel";
 import { PhotoFolder, type FolderItem } from "@/components/PhotoFolder";
+import { BulkOperationsToolbar } from "@/components/sources/bulk-operations-toolbar";
+import { ProcessingStatus, useProcessingJobs } from "@/components/processing-status";
+import { useSourceShortcuts, useBulkSelection } from "@/hooks/use-keyboard-shortcuts";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import {cn} from "@/lib/utils.ts";
 
 function getSourceIcon(kind: string, isPage?: boolean) {
   if (isPage) return <FileText className="w-5 h-5 text-blue-500" />;
@@ -258,11 +264,17 @@ function SourceCard({
   onRename,
   onDelete,
   onMove,
+  isSelected,
+  onSelect,
+  isSelectionMode,
 }: {
   source: Source & { isPage?: boolean };
   onRename: (newTitle: string) => void;
   onDelete: () => void;
   onMove: (targetFolderId: number | null) => void;
+  isSelected?: boolean;
+  onSelect?: () => void;
+  isSelectionMode?: boolean;
 }) {
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -292,11 +304,23 @@ function SourceCard({
   return (
     <>
       <div draggable onDragStart={handleDragStart} className="group relative">
-        <Card className="h-full border-border/80 bg-card/50 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md">
+        <Card className={cn(
+          "h-full border-border/80 bg-card/50 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md",
+          isSelected && "border-primary ring-2 ring-primary/20"
+        )}>
           <CardContent className="flex h-full flex-col gap-4 p-5">
             <div className="flex items-center justify-between">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/50 text-muted-foreground">
-                {getSourceIcon(source.kind, isPage)}
+              <div className="flex items-center gap-3">
+                {(isSelectionMode || isSelected) && onSelect && (
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={onSelect}
+                    className="h-5 w-5"
+                  />
+                )}
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/50 text-muted-foreground">
+                  {getSourceIcon(source.kind, isPage)}
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 {!isPage && (
@@ -610,6 +634,9 @@ export default function SourcesList() {
   const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
+  // Processing jobs (for background status)
+  const { jobs, cancelJob, retryJob } = useProcessingJobs(5000);
+
   // Mutations
   const updatePage = useUpdatePage();
   const deletePage = useDeletePage();
@@ -620,7 +647,46 @@ export default function SourcesList() {
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dropTargetId, setDropTargetId] = useState<number | null>(null);
 
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+
   const [folderId, setFolderId] = useState<number | null>(null);
+
+  // Keyboard shortcuts
+  useSourceShortcuts({
+    onSelectAll: () => {
+      const allIds = childItems.map((item) => item.id);
+      setSelectedIds(new Set(allIds));
+      setIsSelectionMode(true);
+    },
+    onDelete: () => {
+      if (selectedIds.size > 0) {
+        handleBulkDelete();
+      }
+    },
+    onMove: () => {
+      if (selectedIds.size > 0) {
+        // Show move dialog - we'll implement this inline
+        toast.info("Move dialog opened");
+      }
+    },
+    onRefresh: () => {
+      queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() });
+      toast.success("Refreshed");
+    },
+  });
+
+  // Listen for custom events
+  useEffect(() => {
+    const handleClearSelection = () => {
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+    };
+    window.addEventListener("eden:clear-selection", handleClearSelection);
+    return () => window.removeEventListener("eden:clear-selection", handleClearSelection);
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -825,6 +891,69 @@ export default function SourcesList() {
     [updateSource, queryClient],
   );
 
+  // Bulk operations
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+
+    const ids = Array.from(selectedIds);
+    let successCount = 0;
+
+    for (const id of ids) {
+      try {
+        await deleteSource.mutateAsync({ id });
+        successCount++;
+      } catch {
+        // Continue with others
+      }
+    }
+
+    await queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
+    setSelectedIds(new Set());
+    toast.success(`Deleted ${successCount} items`);
+  }, [selectedIds, deleteSource, queryClient]);
+
+  const handleBulkMove = useCallback(async (targetFolderId: number | null) => {
+    if (selectedIds.size === 0) return;
+
+    const ids = Array.from(selectedIds);
+    let successCount = 0;
+
+    for (const id of ids) {
+      try {
+        await updateSource.mutateAsync({
+          id,
+          data: { parentPageId: targetFolderId },
+        });
+        successCount++;
+      } catch {
+        // Continue with others
+      }
+    }
+
+    await queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
+    setSelectedIds(new Set());
+    toast.success(`Moved ${successCount} items`);
+  }, [selectedIds, updateSource, queryClient]);
+
+  const handleBulkTag = useCallback(async (tags: string[]) => {
+    // Tags would be stored in source metadata - for now just show toast
+    toast.info(`Would tag ${selectedIds.size} items with: ${tags.join(", ")}`);
+    setSelectedIds(new Set());
+  }, [selectedIds]);
+
+  const toggleSelection = useCallback((id: number) => {
+    setSelectedIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+    setIsSelectionMode(true);
+  }, []);
+
   // Root drop zone handler (for dropping to current folder)
   const handleRootDrop = useCallback(
     async (e: React.DragEvent) => {
@@ -908,6 +1037,14 @@ export default function SourcesList() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setIsSelectionMode(!isSelectionMode)}
+                className={cn(isSelectionMode && "bg-primary/10 text-primary")}
+              >
+                <CheckSquare className="h-4 w-4 mr-1.5" />
+                {isSelectionMode ? "Done" : "Select"}
+              </Button>
               <CreateFolderDialog parentId={folderId} />
               <CreateDocumentDialog parentId={folderId} />
               <SourceCreateDialog
@@ -1049,6 +1186,9 @@ export default function SourcesList() {
                       onRename={(newTitle) => handleSourceRename(doc.id, newTitle)}
                       onDelete={() => handleSourceDelete(doc.id)}
                       onMove={(targetFolderId) => handleSourceMove(doc.id, targetFolderId)}
+                      isSelected={selectedIds.has(doc.id)}
+                      onSelect={() => toggleSelection(doc.id)}
+                      isSelectionMode={isSelectionMode}
                     />
                   ))}
                 </div>
@@ -1068,6 +1208,9 @@ export default function SourcesList() {
                       onRename={(newTitle) => handleSourceRename(source.id, newTitle)}
                       onDelete={() => handleSourceDelete(source.id)}
                       onMove={(targetFolderId) => handleSourceMove(source.id, targetFolderId)}
+                      isSelected={selectedIds.has(source.id)}
+                      onSelect={() => toggleSelection(source.id)}
+                      isSelectionMode={isSelectionMode}
                     />
                   ))}
                 </div>
@@ -1075,6 +1218,34 @@ export default function SourcesList() {
             : null}
           </div>
         }
+
+        {/* Bulk Operations Toolbar */}
+        <BulkOperationsToolbar
+          selectedCount={selectedIds.size}
+          totalCount={childItems.length}
+          onClearSelection={() => {
+            setSelectedIds(new Set());
+            setIsSelectionMode(false);
+          }}
+          onSelectAll={() => {
+            const allIds = childItems.map((item) => item.id);
+            setSelectedIds(new Set(allIds));
+          }}
+          onDelete={handleBulkDelete}
+          onMove={handleBulkMove}
+          onTag={handleBulkTag}
+          availableFolders={folderPages.map((f) => ({ id: f.id, title: f.title, emoji: undefined }))}
+          folderPages={folderPages.map((f) => ({ id: f.id, title: f.title, kind: f.kind, parentId: f.parentId, emoji: f.emoji }))}
+          selectedSourceIds={Array.from(selectedIds)}
+        />
+
+        {/* Background Processing Status */}
+        <ProcessingStatus
+          jobs={jobs}
+          onCancel={cancelJob}
+          onRetry={retryJob}
+          onClear={() => toast.info("Clear completed jobs")}
+        />
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import searchRouter from "./search";
 import chatRouter from "./chat";
 import agentsRouter from "./agents";
 import dashboardRouter from "./dashboard";
+import workflowsRouter from "./workflows";
 import authRouter from "./auth";
 import { authenticate } from "../lib/auth";
 
@@ -25,5 +26,6 @@ router.use(searchRouter);
 router.use(chatRouter);
 router.use(agentsRouter);
 router.use(dashboardRouter);
+router.use(workflowsRouter);
 
 export default router;

@@ -10,6 +10,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   LogOut,
+  Zap,
 } from "lucide-react";
 import { useListPages, useCreatePage, getListPagesQueryKey } from "@workspace/api-client-react";
 import { CommandPalette } from "../command-palette";
@@ -48,6 +49,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { icon: Database, label: "Sources", href: "/sources" },
     { icon: MessageSquare, label: "Chat", href: "/chat" },
     { icon: Bot, label: "Agents", href: "/agents" },
+    { icon: Zap, label: "Workflows", href: "/workflows" },
   ];
 
   return (
