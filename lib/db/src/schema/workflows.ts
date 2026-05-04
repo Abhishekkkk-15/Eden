@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, boolean, jsonb, unique } from "drizzle-orm/pg-core";
 import { usersTable } from "./auth";
 
 // Workflow automation: triggers + actions
@@ -95,7 +95,9 @@ export const sourceTagsTable = pgTable("source_tags", {
   sourceId: integer("source_id").notNull(),
   tag: text("tag").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  uniqueSourceTag: unique().on(table.sourceId, table.tag),
+}));
 
 export type Workflow = typeof workflowsTable.$inferSelect;
 export type InsertWorkflow = typeof workflowsTable.$inferInsert;

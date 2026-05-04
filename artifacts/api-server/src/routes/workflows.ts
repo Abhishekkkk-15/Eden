@@ -5,17 +5,11 @@ import { z } from "zod";
 
 const router: IRouter = Router();
 
-// Validation schemas
-const WorkflowActionSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("tag"), config: z.object({ tags: z.array(z.string()), replaceExisting: z.boolean().optional() }) }),
-  z.object({ type: z.literal("move_to_folder"), config: z.object({ folderId: z.number() }) }),
-  z.object({ type: z.literal("summarize"), config: z.object({ maxLength: z.number().optional() }) }),
-  z.object({ type: z.literal("transcribe"), config: z.object({ language: z.string().optional() }) }),
-  z.object({ type: z.literal("extract_entities"), config: z.object({ entityTypes: z.array(z.string()).optional() }) }),
-  z.object({ type: z.literal("send_notification"), config: z.object({ message: z.string(), notifyType: z.enum(["toast", "email"]) }) }),
-  z.object({ type: z.literal("webhook"), config: z.object({ url: z.string(), method: z.enum(["GET", "POST"]), headers: z.record(z.string()).optional() }) }),
-  z.object({ type: z.literal("ai_transform"), config: z.object({ prompt: z.string(), outputField: z.enum(["title", "description", "tags"]) }) }),
-]);
+// Validation schemas - more lenient for UI compatibility
+const WorkflowActionSchema = z.object({
+  type: z.enum(["tag", "move_to_folder", "summarize", "transcribe", "extract_entities", "send_notification", "webhook", "ai_transform"]),
+  config: z.record(z.unknown()).default({}),
+});
 
 const CreateWorkflowSchema = z.object({
   name: z.string().min(1),
@@ -64,6 +58,7 @@ router.post("/workflows", async (req, res) => {
     res.status(201).json(workflow);
   } catch (error) {
     if (error instanceof z.ZodError) {
+      console.error("[Workflow] Validation error:", error.errors);
       res.status(400).json({ error: "Invalid workflow data", details: error.errors });
     } else {
       console.error("Failed to create workflow:", error);
@@ -179,19 +174,34 @@ router.post("/workflows/:id/run", async (req, res) => {
       return res.status(404).json({ error: "Workflow not found" });
     }
 
+    // Get optional sourceId from request body for manual runs
+    const { sourceId } = req.body as { sourceId?: number };
+
     // Create a workflow run
     const [run] = await db
       .insert(workflowRunsTable)
       .values({
         workflowId,
+        triggerSourceId: sourceId || null,
         triggerData: req.body || {},
         status: "running",
         actionResults: [],
       })
       .returning();
 
+    // Inject sourceId into actions if provided
+    let workflowToExecute = workflow;
+    if (sourceId) {
+      const actions = workflow.actions as Array<{ type: string; config: Record<string, unknown> }>;
+      const actionsWithSource = actions.map((a) => ({
+        ...a,
+        config: { ...a.config, sourceId },
+      }));
+      workflowToExecute = { ...workflow, actions: actionsWithSource };
+    }
+
     // Execute workflow asynchronously
-    executeWorkflow(workflow, run.id, user.id);
+    executeWorkflow(workflowToExecute, run.id, user.id);
 
     res.json({ runId: run.id, status: "running" });
   } catch (error) {
@@ -316,9 +326,12 @@ async function executeWorkflow(
   const actions = workflow.actions as Array<{ type: string; config: Record<string, unknown> }>;
   const results: Array<{ actionIndex: number; status: string; output?: unknown; error?: string }> = [];
 
+  console.log(`[Workflow] Starting execution of workflow ${workflow.id}, run ${runId} with ${actions.length} actions`);
+
   try {
     for (let i = 0; i < actions.length; i++) {
       const action = actions[i];
+      console.log(`[Workflow] Executing action ${i}: ${action.type}`, action.config);
       let result;
 
       try {
@@ -374,8 +387,11 @@ async function executeWorkflow(
         lastRunAt: new Date(),
       })
       .where(eq(workflowsTable.id, workflow.id));
+
+    console.log(`[Workflow] Successfully completed run ${runId} with ${results.length} actions`);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error(`[Workflow] Execution failed for run ${runId}:`, errorMessage);
 
     // Mark workflow run as failed
     await db
@@ -392,8 +408,12 @@ async function executeWorkflow(
 
 // Action executors
 async function executeTagAction(config: { tags?: string[]; sourceId?: number; replaceExisting?: boolean }, userId: string) {
-  if (!config.sourceId || !config.tags || config.tags.length === 0) {
-    throw new Error("Missing sourceId or tags");
+  console.log(`[TagAction] Called with config:`, config);
+  if (!config.sourceId) {
+    throw new Error("Missing sourceId - workflow must be triggered by a source or run with a sourceId");
+  }
+  if (!config.tags || config.tags.length === 0) {
+    throw new Error("Missing tags");
   }
 
   // If replaceExisting is true, delete existing tags first
@@ -420,11 +440,12 @@ async function executeTagAction(config: { tags?: string[]; sourceId?: number; re
         .returning();
       
       if (tagRecord) inserted.push(normalizedTag);
-    } catch {
-      // Tag might already exist, skip
+    } catch (err) {
+      console.error(`[TagAction] Failed to insert tag "${normalizedTag}":`, err);
     }
   }
 
+  console.log(`[TagAction] Successfully applied ${inserted.length} tags to source ${config.sourceId}:`, inserted);
   return { tags: inserted, applied: inserted.length };
 }
 

@@ -55,23 +55,12 @@ import { cn } from "@/lib/utils";
 type TriggerType = "source_created" | "source_updated" | "scheduled" | "manual";
 type ActionType = "tag" | "move_to_folder" | "summarize" | "transcribe" | "extract_entities" | "send_notification" | "webhook" | "ai_transform";
 
-interface Workflow {
-  id: number;
-  name: string;
-  description: string;
-  emoji: string;
-  triggerType: TriggerType;
-  actions: WorkflowAction[];
-  isActive: boolean;
-  runCount: number;
-  lastRunAt?: string;
-  createdAt: string;
-}
-
 interface WorkflowAction {
   type: ActionType;
   config: Record<string, unknown>;
 }
+
+type WorkflowWithActions = Workflow & { actions: WorkflowAction[]; };
 
 const triggerIcons: Record<TriggerType, React.ReactNode> = {
   source_created: <Upload className="w-4 h-4" />,
