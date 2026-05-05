@@ -40,6 +40,7 @@ type SourceListRow = {
   status: string;
   createdAt: string;
   isPage?: boolean;
+  tags?: string[];
 };
 
 function toSourceResponse(row: SourceListRow) {
@@ -58,6 +59,7 @@ function toSourceResponse(row: SourceListRow) {
     status: row.status,
     createdAt: row.createdAt,
     isPage: row.isPage ?? false,
+    tags: row.tags || [],
   };
 }
 
@@ -80,13 +82,14 @@ router.get("/sources", async (req, res) => {
   const rows = await db.execute(sql`
     SELECT 
       id, kind, title, url, parent_page_id, media_path, media_mime_type, media_size_bytes,
-      summary, status, created_at, chunk_count, is_page
+      summary, status, created_at, chunk_count, is_page, tags
     FROM (
       SELECT 
         s.id, s.kind, s.title, s.url, s.parent_page_id, s.media_path, s.media_mime_type, s.media_size_bytes,
         s.summary, s.status, s.created_at,
         (SELECT count(*) FROM source_chunks c WHERE c.source_id = s.id) AS chunk_count,
-        false as is_page
+        false as is_page,
+        (SELECT json_agg(st.tag) FROM source_tags st WHERE st.source_id = s.id) AS tags
       FROM sources s
       WHERE s.user_id = ${user.id}
       UNION ALL
@@ -95,7 +98,8 @@ router.get("/sources", async (req, res) => {
         null as media_path, null as media_mime_type, null as media_size_bytes,
         null as summary, 'ready' as status, p.created_at,
         0 as chunk_count,
-        true as is_page
+        true as is_page,
+        '[]'::json as tags
       FROM pages p
       WHERE p.kind = 'page' AND p.user_id = ${user.id}
     ) combined
@@ -550,6 +554,51 @@ router.delete("/sources/:id", async (req, res) => {
   }
 
   res.status(404).json({ error: "Item not found" });
+});
+
+// Bulk tag sources
+router.post("/sources/bulk/tags", async (req, res) => {
+  const user = (req as any).user;
+  const { ids, tags } = z.object({
+    ids: z.array(z.number()),
+    tags: z.array(z.string()),
+  }).parse(req.body);
+
+  if (ids.length === 0 || tags.length === 0) {
+    return res.status(400).json({ error: "Missing ids or tags" });
+  }
+
+  try {
+    await db.transaction(async (tx) => {
+      for (const id of ids) {
+        // Verify ownership
+        const [source] = await tx
+          .select()
+          .from(sourcesTable)
+          .where(and(eq(sourcesTable.id, id), eq(sourcesTable.userId, user.id)));
+        
+        if (!source) continue;
+
+        for (const tag of tags) {
+          const normalized = tag.trim().toLowerCase();
+          if (!normalized) continue;
+
+          await tx
+            .insert(sourceTagsTable)
+            .values({
+              sourceId: id,
+              tag: normalized,
+            })
+            .onConflictDoNothing();
+        }
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Failed to bulk tag sources:", error);
+    res.status(500).json({ error: "Failed to bulk tag sources" });
+  }
 });
 
 export default router;

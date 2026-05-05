@@ -5,6 +5,7 @@ import {
   sourcesTable,
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { triggerWorkflows } from "../routes/workflows";
 import { persistUploadedFile } from "./source-media";
 import { queueJob } from "./job-queue";
 
@@ -243,6 +244,17 @@ async function processQueueItem(itemId: number) {
       console.log(`[CloudImport] Queued AI jobs for source ${source.id}`);
     } catch (jobErr) {
       console.error(`[CloudImport] Failed to queue jobs for source ${source.id}:`, jobErr);
+    }
+
+    // ── Trigger Workflows ──────────────────────────────────────────────────
+    try {
+      void triggerWorkflows("source_created", source.id, item.userId, {
+        kind: kind,
+        parentPageId: item.targetPageId ?? null,
+      });
+      console.log(`[CloudImport] Triggered workflows for source ${source.id}`);
+    } catch (workflowErr) {
+      console.error(`[CloudImport] Failed to trigger workflows for source ${source.id}:`, workflowErr);
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

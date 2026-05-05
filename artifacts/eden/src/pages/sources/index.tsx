@@ -70,6 +70,7 @@ import { CloudExportDialog } from "@/components/cloud/export-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {cn} from "@/lib/utils.ts";
+import { useBulkTagSources } from "@/hooks/use-sources";
 
 function getSourceIcon(kind: string, isPage?: boolean) {
   if (isPage) return <FileText className="w-5 h-5 text-blue-500" />;
@@ -89,7 +90,7 @@ function getSourceIcon(kind: string, isPage?: boolean) {
 
 type DragItem = { type: "folder"; id: number } | { type: "source"; id: number; isPage?: boolean };
 
-type SourceWithPage = Source & { isPage?: boolean };
+type SourceWithPage = Source & { isPage?: boolean; tags?: string[] };
 type FolderPreviewItem = { id: number; title: string; kind: "document" | "file" };
 
 function FolderCard({
@@ -394,6 +395,15 @@ function SourceCard({
                 </>
               )}
             </div>
+            {source.tags && source.tags.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {source.tags.map((tag) => (
+                  <Badge key={tag} variant="secondary" className="px-1.5 py-0 text-[10px] uppercase font-bold tracking-wider bg-primary/10 text-primary border-none">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            )}
             <div className="mt-2 text-xs text-muted-foreground">
               {format(new Date(source.createdAt), "MMM d, yyyy")}
             </div>
@@ -694,6 +704,7 @@ export default function SourcesList() {
   const deletePage = useDeletePage();
   const updateSource = useUpdateSource();
   const deleteSource = useDeleteSource();
+  const bulkTagSources = useBulkTagSources();
 
   // Drag state
   const [draggingId, setDraggingId] = useState<number | null>(null);
@@ -1044,10 +1055,18 @@ export default function SourcesList() {
   }, [selectedIds, updateSource, queryClient]);
 
   const handleBulkTag = useCallback(async (tags: string[]) => {
-    // Tags would be stored in source metadata - for now just show toast
-    toast.info(`Would tag ${selectedIds.size} items with: ${tags.join(", ")}`);
-    setSelectedIds(new Set());
-  }, [selectedIds]);
+    if (selectedIds.size === 0) return;
+    
+    try {
+      const ids = Array.from(selectedIds);
+      await bulkTagSources.mutateAsync({ ids, tags });
+      toast.success(`Tagged ${ids.length} items`);
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to tag items");
+    }
+  }, [selectedIds, bulkTagSources]);
 
   const toggleSelection = useCallback((id: number) => {
     setSelectedIds((prev) => {

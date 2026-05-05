@@ -551,20 +551,27 @@ export async function triggerWorkflows(
       );
 
     for (const workflow of workflows) {
-      const triggerConfig = workflow.triggerConfig as { sourceKind?: string[]; folderId?: number };
+      const triggerConfig = workflow.triggerConfig as { sourceKind?: string[]; folderId?: number; anyFolder?: boolean };
 
+      console.log(`[WorkflowTrigger] Checking workflow ${workflow.id} ("${workflow.name}") against source ${sourceId}`);
+      
       // Check if workflow matches the source criteria
       let shouldTrigger = true;
 
-      if (triggerConfig.sourceKind && !triggerConfig.sourceKind.includes(sourceData.kind)) {
+      if (triggerConfig.sourceKind && triggerConfig.sourceKind.length > 0 && !triggerConfig.sourceKind.includes(sourceData.kind)) {
+        console.log(`[WorkflowTrigger]  - Skip: sourceKind mismatch (${sourceData.kind} not in [${triggerConfig.sourceKind.join(", ")}])`);
         shouldTrigger = false;
       }
 
-      if (triggerConfig.folderId !== undefined && sourceData.parentPageId !== triggerConfig.folderId) {
-        shouldTrigger = false;
+      if (shouldTrigger && !triggerConfig.anyFolder && triggerConfig.folderId !== undefined) {
+        if (sourceData.parentPageId !== triggerConfig.folderId) {
+          console.log(`[WorkflowTrigger]  - Skip: folderId mismatch (source in ${sourceData.parentPageId}, workflow expects ${triggerConfig.folderId})`);
+          shouldTrigger = false;
+        }
       }
 
       if (shouldTrigger) {
+        console.log(`[WorkflowTrigger]  - Match! Creating run for workflow ${workflow.id}`);
         // Create workflow run
         const [run] = await db
           .insert(workflowRunsTable)
