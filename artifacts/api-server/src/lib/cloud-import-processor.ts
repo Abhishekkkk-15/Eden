@@ -6,6 +6,7 @@ import {
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { persistUploadedFile } from "./source-media";
+import { queueJob } from "./job-queue";
 
 // Poll every 5 seconds
 const POLL_INTERVAL = 5000;
@@ -14,12 +15,35 @@ const MAX_CONCURRENT = 3;
 const processing = new Set<number>();
 
 // ── Mime-type → Eden source kind mapping ─────────────────────────────────────
+function getMimeFromExtension(filename: string): string | null {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  switch (ext) {
+    case "png": return "image/png";
+    case "jpg":
+    case "jpeg": return "image/jpeg";
+    case "gif": return "image/gif";
+    case "webp": return "image/webp";
+    case "mp4": return "video/mp4";
+    case "webm": return "video/webm";
+    case "mov": return "video/quicktime";
+    case "mp3": return "audio/mpeg";
+    case "wav": return "audio/wav";
+    case "m4a": return "audio/mp4";
+    case "pdf": return "application/pdf";
+    case "txt": return "text/plain";
+    case "md": return "text/markdown";
+    case "doc": return "application/msword";
+    case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    default: return null;
+  }
+}
+
 function mimeToKind(mimeType: string | null | undefined): string {
   if (!mimeType) return "document";
   if (mimeType.startsWith("image/")) return "image";
   if (mimeType.startsWith("video/")) return "video";
   if (mimeType.startsWith("audio/")) return "audio";
-  // Treat text-like documents as "document"
+  if (mimeType === "text/plain" || mimeType === "application/pdf") return "document";
   return "document";
 }
 
@@ -144,7 +168,10 @@ async function processQueueItem(itemId: number) {
       .where(eq(cloudImportQueueTable.id, itemId));
 
     // ── Create the source record first (so we have an ID for Cloudinary) ──
-    const mimeType = item.mimeType ?? "application/octet-stream";
+    let mimeType = item.mimeType;
+    if (!mimeType || mimeType === "application/octet-stream") {
+      mimeType = getMimeFromExtension(item.providerFileName) ?? "application/octet-stream";
+    }
     const kind = mimeToKind(mimeType);
 
     const [source] = await db
@@ -157,7 +184,7 @@ async function processQueueItem(itemId: number) {
         mediaMimeType: mimeType,
         mediaSizeBytes: item.fileSize ?? null,
         parentPageId: item.targetPageId ?? null,
-        status: "ready",
+        status: "processing", // Start in processing status
       })
       .returning();
 
@@ -201,6 +228,22 @@ async function processQueueItem(itemId: number) {
     console.log(
       `[CloudImport] ✓ Item ${itemId} → source ${source.id} (${item.providerFileName})`
     );
+
+    // ── Trigger AI Jobs ────────────────────────────────────────────────────
+    try {
+      if (kind === "audio" || kind === "video") {
+        await queueJob(item.userId, "transcribe", "source", source.id, {});
+      } else if (kind === "image") {
+        await queueJob(item.userId, "analyze_image", "source", source.id, {});
+      } else if (kind === "document") {
+        // For documents, we might need to extract text first if we had a parser
+        // For now, just queue summary which will try to use the content
+        await queueJob(item.userId, "generate_summary", "source", source.id, {});
+      }
+      console.log(`[CloudImport] Queued AI jobs for source ${source.id}`);
+    } catch (jobErr) {
+      console.error(`[CloudImport] Failed to queue jobs for source ${source.id}:`, jobErr);
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[CloudImport] ✗ Item ${itemId} failed:`, message);
