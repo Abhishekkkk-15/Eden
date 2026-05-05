@@ -98,54 +98,6 @@ const actionLabels: Record<ActionType, string> = {
   ai_transform: "AI transform",
 };
 
-// Sample workflows for demo
-const sampleWorkflows: Workflow[] = [
-  {
-    id: 1,
-    name: "Auto-tag Receipts",
-    description: "Automatically tag uploaded images with 'receipt' and 'finance'",
-    emoji: "📄",
-    triggerType: "source_created",
-    actions: [
-      { type: "tag", config: { tags: ["receipt", "finance"] } },
-    ],
-    isActive: true,
-    runCount: 23,
-    lastRunAt: "2024-01-15T10:30:00Z",
-    createdAt: "2024-01-01T00:00:00Z",
-  },
-  {
-    id: 2,
-    name: "Video Auto-Process",
-    description: "Transcribe and summarize all uploaded videos",
-    emoji: "🎬",
-    triggerType: "source_created",
-    actions: [
-      { type: "transcribe", config: {} },
-      { type: "summarize", config: { maxLength: 300 } },
-    ],
-    isActive: true,
-    runCount: 8,
-    lastRunAt: "2024-01-14T16:20:00Z",
-    createdAt: "2024-01-05T00:00:00Z",
-  },
-  {
-    id: 3,
-    name: "Daily Newsletter",
-    description: "Generate a summary of yesterday's sources every morning",
-    emoji: "📰",
-    triggerType: "scheduled",
-    actions: [
-      { type: "ai_transform", config: { prompt: "Create a daily digest", outputField: "summary" } },
-      { type: "send_notification", config: { message: "Your daily summary is ready!" } },
-    ],
-    isActive: false,
-    runCount: 45,
-    lastRunAt: "2024-01-10T09:00:00Z",
-    createdAt: "2023-12-01T00:00:00Z",
-  },
-];
-
 export default function WorkflowsList() {
   const { data: workflows, isLoading } = useWorkflows();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -259,12 +211,15 @@ export default function WorkflowsList() {
 
                 {/* Actions */}
                 <div className="flex flex-wrap gap-1.5">
-                  {workflow.actions.map((action, i) => (
-                    <Badge key={i} variant="secondary" className="text-xs">
-                      {actionIcons[action.type]}
-                      <span className="ml-1">{actionLabels[action.type]}</span>
-                    </Badge>
-                  ))}
+                  {workflow.actions.map((action, i) => {
+                    const actionType = action.type as ActionType;
+                    return (
+                      <Badge key={i} variant="secondary" className="text-xs">
+                        {actionIcons[actionType]}
+                        <span className="ml-1">{actionLabels[actionType]}</span>
+                      </Badge>
+                    );
+                  })}
                 </div>
 
                 {workflow.lastRunAt && (
@@ -352,7 +307,7 @@ export default function WorkflowsList() {
 // Workflow Builder Component
 interface WorkflowBuilderProps {
   initialWorkflow?: Workflow;
-  onSave: (workflow: Omit<Workflow, "id" | "runCount" | "createdAt">) => void;
+  onSave: (workflow: Omit<Workflow, "id" | "runCount" | "createdAt" | "updatedAt" | "lastRunAt">) => void;
   onCancel: () => void;
   onDelete?: () => void;
   onRun?: () => void;
@@ -366,7 +321,7 @@ function WorkflowBuilder({ initialWorkflow, onSave, onCancel, onDelete, onRun }:
     initialWorkflow?.triggerType ?? "source_created"
   );
   const [actions, setActions] = useState<WorkflowAction[]>(
-    initialWorkflow?.actions ?? []
+    (initialWorkflow?.actions as WorkflowAction[]) ?? []
   );
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
@@ -406,7 +361,7 @@ function WorkflowBuilder({ initialWorkflow, onSave, onCancel, onDelete, onRun }:
       triggerType,
       actions,
       isActive: true,
-      lastRunAt: undefined,
+      triggerConfig: {},
     });
   };
 

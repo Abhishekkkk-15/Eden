@@ -18,6 +18,7 @@ import ChatDetail from "@/pages/chat/[id]";
 import AgentsList from "@/pages/agents/index";
 import AgentDetail from "@/pages/agents/[id]";
 import WorkflowsList from "@/pages/workflows/index";
+import IntegrationsSettings from "@/pages/settings/integrations";
 import LoginPage from "@/pages/login";
 import SignupPage from "@/pages/signup";
 
@@ -61,6 +62,7 @@ function Router() {
             <Route path="/agents" component={AgentsList} />
             <Route path="/agents/:id" component={AgentDetail} />
             <Route path="/workflows" component={WorkflowsList} />
+            <Route path="/settings/integrations" component={IntegrationsSettings} />
             <Route component={NotFound} />
           </Switch>
         </AppLayout>

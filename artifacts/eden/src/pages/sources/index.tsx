@@ -31,6 +31,7 @@ import {
   Trash2,
   FolderOpen,
   CheckSquare,
+  Cloud,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -58,6 +59,7 @@ import { PhotoFolder, type FolderItem } from "@/components/PhotoFolder";
 import { BulkOperationsToolbar } from "@/components/sources/bulk-operations-toolbar";
 import { ProcessingStatus, useProcessingJobs } from "@/components/processing-status";
 import { useSourceShortcuts, useBulkSelection } from "@/hooks/use-keyboard-shortcuts";
+  import { CloudImportDialog } from "@/components/cloud/import-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {cn} from "@/lib/utils.ts";
@@ -616,6 +618,23 @@ function CreateDocumentDialog({ parentId }: { parentId: number | null }) {
   );
 }
 
+function CloudImportButton({ parentId }: { parentId: number | null }) {
+  const [open, setOpen] = useState(false);
+  
+  return (
+    <>
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        <Cloud className="h-4 w-4 mr-1.5" /> Import from Cloud
+      </Button>
+      <CloudImportDialog 
+        open={open} 
+        onOpenChange={setOpen} 
+        targetPageId={parentId || undefined}
+      />
+    </>
+  );
+}
+
 /** Keep `q` (and other params) when opening folders or returning to root. */
 function sourcesPathForFolder(targetFolderId: number | null): string {
   const params = new URLSearchParams(window.location.search);
@@ -1062,6 +1081,7 @@ export default function SourcesList() {
                   </Button>
                 }
               />
+              <CloudImportButton parentId={folderId} />
             </div>
           </div>
 

@@ -8,6 +8,7 @@ import chatRouter from "./chat";
 import agentsRouter from "./agents";
 import dashboardRouter from "./dashboard";
 import workflowsRouter from "./workflows";
+import cloudIntegrationsRouter from "./cloud-integrations";
 import authRouter from "./auth";
 import { authenticate } from "../lib/auth";
 
@@ -15,6 +16,9 @@ const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use("/auth", authRouter);
+
+// Cloud integrations OAuth routes (must be public for callbacks)
+router.use(cloudIntegrationsRouter);
 
 // Protect all following routes
 router.use(authenticate);
