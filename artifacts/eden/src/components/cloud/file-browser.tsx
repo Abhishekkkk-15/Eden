@@ -645,7 +645,7 @@ export function CloudFileBrowser({
         data: {
           fileId: file.id,
           fileName: file.name,
-          filePath: currentPath,
+          filePath: file.path || currentPath,
           mimeType: file.mimeType,
           fileSize: file.size,
           targetPageId,

@@ -2,6 +2,7 @@ import "./load-env";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startJobQueueProcessor } from "./lib/job-queue";
+import { startCloudImportProcessor } from "./lib/cloud-import-processor";
 
 const rawPort = process.env["PORT"];
 
@@ -20,6 +21,9 @@ if (Number.isNaN(port) || port <= 0) {
 // Start job queue processor
 const stopJobProcessor = startJobQueueProcessor();
 
+// Start cloud import processor (handles Dropbox/Google Drive imports)
+const stopCloudImportProcessor = startCloudImportProcessor();
+
 app.listen(port, (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
@@ -33,11 +37,13 @@ app.listen(port, (err) => {
 process.on("SIGINT", () => {
   logger.info("Shutting down server...");
   stopJobProcessor();
+  stopCloudImportProcessor();
   process.exit(0);
 });
 
 process.on("SIGTERM", () => {
   logger.info("Shutting down server...");
   stopJobProcessor();
+  stopCloudImportProcessor();
   process.exit(0);
 });

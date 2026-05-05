@@ -378,9 +378,14 @@ async function listGoogleDriveFiles(accessToken: string, folderId: string): Prom
 async function listDropboxFiles(accessToken: string, folderId: string): Promise<Array<{ id: string; name: string; type: "file" | "folder"; mimeType?: string; size?: number; modifiedAt?: string }>> {
   // Dropbox uses folder paths, not IDs (unlike Google Drive)
   // folderId is actually a path or empty for root
-  const path = folderId || "";
+  let normalizedPath = folderId || "";
+  if (normalizedPath === "/") {
+    normalizedPath = "";
+  } else if (normalizedPath !== "" && !normalizedPath.startsWith("/") && !normalizedPath.startsWith("id:")) {
+    normalizedPath = "/" + normalizedPath;
+  }
   
-  console.log("[DEBUG] Dropbox list folder:", { path, accessToken: accessToken.slice(0, 10) + "..." });
+  console.log("[DEBUG] Dropbox list folder:", { path: normalizedPath, originalPath: folderId, accessToken: accessToken.slice(0, 10) + "..." });
   
   try {
     const response = await fetch("https://api.dropboxapi.com/2/files/list_folder", {
@@ -390,16 +395,21 @@ async function listDropboxFiles(accessToken: string, folderId: string): Promise<
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        path: path || "", // "" = root, or use the path
+        path: normalizedPath, // "" = root, or use the path starting with /
         recursive: false,
         include_media_info: false,
         include_deleted: false,
         include_has_explicit_shared_members: false,
       }),
     });
-
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      let errorData: any = {};
+      const responseText = await response.text();
+      try {
+        errorData = JSON.parse(responseText);
+      } catch (e) {
+        errorData = { error_summary: responseText };
+      }
       console.error("[DEBUG] Dropbox API error:", { 
         status: response.status, 
         error: errorData 
@@ -414,9 +424,11 @@ async function listDropboxFiles(accessToken: string, folderId: string): Promise<
     });
     
     return data.entries.map((entry: any) => ({
-      id: entry.id || entry.path_lower, // Use path_lower as ID if id not present
+      id: entry.id || entry.path_lower,
       name: entry.name,
       type: entry[".tag"] === "folder" ? "folder" : "file",
+      mimeType: entry.mime_type || (entry[".tag"] === "file" ? "application/octet-stream" : undefined),
+      path: entry.path_display || entry.path_lower,
       size: entry.size,
       modifiedAt: entry.client_modified || entry.server_modified,
     }));

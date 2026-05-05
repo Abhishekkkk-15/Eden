@@ -8,7 +8,6 @@ import {
   useSyncCloudIntegration,
 } from "@/hooks/use-cloud-integrations";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
@@ -21,20 +20,42 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  ExternalLink,
+  Plug,
+  Unplug,
+  Calendar,
 } from "lucide-react";
 
-const providerIcons = {
-  google_drive: <FolderOpen className="h-5 w-5 text-blue-500" />,
-  dropbox: <Cloud className="h-5 w-5 text-blue-600" />,
-  one_drive: <HardDrive className="h-5 w-5 text-blue-700" />,
-};
+const providerMeta = {
+  google_drive: {
+    label: "Google Drive",
+    description: "Import documents, images, spreadsheets, and videos from Google Drive.",
+    icon: FolderOpen,
+    color: "text-blue-500",
+    bgColor: "bg-blue-500/10",
+    borderColor: "border-blue-500/30",
+    activeBg: "from-blue-500/5 to-transparent",
+  },
+  dropbox: {
+    label: "Dropbox",
+    description: "Browse and import files directly from your Dropbox folders.",
+    icon: Cloud,
+    color: "text-sky-500",
+    bgColor: "bg-sky-500/10",
+    borderColor: "border-sky-500/30",
+    activeBg: "from-sky-500/5 to-transparent",
+  },
+  one_drive: {
+    label: "OneDrive",
+    description: "Connect Microsoft OneDrive to access and import your files.",
+    icon: HardDrive,
+    color: "text-blue-700",
+    bgColor: "bg-blue-700/10",
+    borderColor: "border-blue-700/30",
+    activeBg: "from-blue-700/5 to-transparent",
+  },
+} as const;
 
-const providerLabels = {
-  google_drive: "Google Drive",
-  dropbox: "Dropbox",
-  one_drive: "OneDrive",
-};
+type Provider = keyof typeof providerMeta;
 
 export default function IntegrationsSettings() {
   const search = useSearch();
@@ -51,10 +72,10 @@ export default function IntegrationsSettings() {
 
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
 
-  // Show success/error messages from OAuth callback
   useEffect(() => {
     if (status === "connected" && provider) {
-      toast.success(`${providerLabels[provider as keyof typeof providerLabels]} connected successfully!`);
+      const label = providerMeta[provider as Provider]?.label ?? provider;
+      toast.success(`${label} connected successfully!`);
       window.history.replaceState({}, "", window.location.pathname);
     }
     if (error) {
@@ -63,24 +84,23 @@ export default function IntegrationsSettings() {
     }
   }, [status, error, provider]);
 
-  const handleConnect = async (provider: "google_drive" | "dropbox") => {
-    setIsConnecting(provider);
+  const handleConnect = async (p: "google_drive" | "dropbox") => {
+    setIsConnecting(p);
     try {
-      if (provider === "google_drive") {
+      if (p === "google_drive") {
         await connectGoogle.mutateAsync();
       } else {
         await connectDropbox.mutateAsync();
       }
-    } catch (err) {
+    } catch {
       toast.error("Failed to initiate connection");
       setIsConnecting(null);
     }
   };
 
-  const handleDisconnect = async (id: number, provider: string) => {
-    if (!confirm(`Are you sure you want to disconnect ${providerLabels[provider as keyof typeof providerLabels]}?`)) {
-      return;
-    }
+  const handleDisconnect = async (id: number, p: string) => {
+    const label = providerMeta[p as Provider]?.label ?? p;
+    if (!confirm(`Are you sure you want to disconnect ${label}?`)) return;
     try {
       await deleteIntegration.mutateAsync(id);
       toast.success("Integration disconnected");
@@ -98,178 +118,183 @@ export default function IntegrationsSettings() {
     }
   };
 
-  const hasGoogleDrive = integrations?.some((i) => i.provider === "google_drive");
-  const hasDropbox = integrations?.some((i) => i.provider === "dropbox");
+  const connectedProviders = new Set(integrations?.map((i) => i.provider) ?? []);
+
+  const availableProviders: ("google_drive" | "dropbox")[] = ["google_drive", "dropbox"];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Integrations</h2>
-        <p className="text-muted-foreground">
+    <div className="min-h-full p-6 md:p-8 max-w-4xl mx-auto space-y-10">
+
+      {/* Page Header */}
+      <div className="space-y-1 pt-6">
+        <h1 className="text-2xl font-bold tracking-tight">Integrations</h1>
+        <p className="text-sm text-muted-foreground">
           Connect your cloud storage accounts to import files directly into Eden.
         </p>
       </div>
 
       <Separator />
 
-      {/* Available Integrations */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <ExternalLink className="h-5 w-5" />
-          Available Providers
-        </h3>
-        
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {/* Google Drive */}
-          <Card className={hasGoogleDrive ? "border-green-500/50" : ""}>
-            <CardHeader className="flex flex-row items-center gap-4 pb-3">
-              <div className="p-2 rounded-lg bg-muted">
-                {providerIcons.google_drive}
-              </div>
-              <div className="flex-1">
-                <CardTitle className="text-base">{providerLabels.google_drive}</CardTitle>
-                <CardDescription className="text-xs">
-                  Import documents, images, and videos
-                </CardDescription>
-              </div>
-              {hasGoogleDrive && (
-                <CheckCircle2 className="h-5 w-5 text-green-500" />
-              )}
-            </CardHeader>
-            <CardContent>
-              {hasGoogleDrive ? (
-                <div className="flex items-center gap-2 text-sm text-green-600">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span className="font-medium">Connected</span>
-                </div>
-              ) : (
-                <Button 
-                  onClick={() => handleConnect("google_drive")} 
-                  disabled={isConnecting === "google_drive"}
-                  className="w-full"
-                  size="sm"
-                >
-                  {isConnecting === "google_drive" ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Connecting...
-                    </>
-                  ) : (
-                    "Connect"
-                  )}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Dropbox */}
-          <Card className={hasDropbox ? "border-green-500/50" : ""}>
-            <CardHeader className="flex flex-row items-center gap-4 pb-3">
-              <div className="p-2 rounded-lg bg-muted">
-                {providerIcons.dropbox}
-              </div>
-              <div className="flex-1">
-                <CardTitle className="text-base">{providerLabels.dropbox}</CardTitle>
-                <CardDescription className="text-xs">
-                  Import from your Dropbox folders
-                </CardDescription>
-              </div>
-              {hasDropbox && (
-                <CheckCircle2 className="h-5 w-5 text-green-500" />
-              )}
-            </CardHeader>
-            <CardContent>
-              {hasDropbox ? (
-                <div className="flex items-center gap-2 text-sm text-green-600">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span className="font-medium">Connected</span>
-                </div>
-              ) : (
-                <Button 
-                  onClick={() => handleConnect("dropbox")} 
-                  disabled={isConnecting === "dropbox"}
-                  className="w-full"
-                  size="sm"
-                >
-                  {isConnecting === "dropbox" ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Connecting...
-                    </>
-                  ) : (
-                    "Connect"
-                  )}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
+      {/* Available Providers */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold">Cloud Storage</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Connect a provider to browse and import files.
+          </p>
         </div>
-      </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {availableProviders.map((p) => {
+            const meta = providerMeta[p];
+            const Icon = meta.icon;
+            const isConnected = connectedProviders.has(p);
+            const connecting = isConnecting === p;
+
+            return (
+              <div
+                key={p}
+                className={`relative rounded-xl border bg-card overflow-hidden transition-all ${
+                  isConnected
+                    ? `border-green-500/40 bg-gradient-to-br ${meta.activeBg}`
+                    : "border-border hover:border-border/80"
+                }`}
+              >
+                {isConnected && (
+                  <div className="absolute top-3 right-3">
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Connected
+                    </span>
+                  </div>
+                )}
+
+                <div className="p-5 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-lg ${meta.bgColor} shrink-0`}>
+                      <Icon className={`h-5 w-5 ${meta.color}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm">{meta.label}</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
+                        {meta.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  {!isConnected && (
+                    <Button
+                      onClick={() => handleConnect(p)}
+                      disabled={connecting}
+                      variant="outline"
+                      size="sm"
+                      className="w-full gap-2"
+                    >
+                      {connecting ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Connecting…
+                        </>
+                      ) : (
+                        <>
+                          <Plug className="h-3.5 w-3.5" />
+                          Connect {meta.label}
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       <Separator />
 
-      {/* Connected Integrations */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <CheckCircle2 className="h-5 w-5" />
-          Connected Accounts
-          {integrations && integrations.length > 0 && (
-            <Badge variant="secondary">{integrations.length}</Badge>
-          )}
-        </h3>
-        
+      {/* Connected Accounts */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold flex items-center gap-2">
+              Connected Accounts
+              {integrations && integrations.length > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {integrations.length}
+                </Badge>
+              )}
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Manage your active cloud storage connections.
+            </p>
+          </div>
+        </div>
+
         {isLoading ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {[1, 2].map((i) => (
-              <Card key={i} className="h-20 animate-pulse bg-muted" />
+              <div
+                key={i}
+                className="h-20 rounded-xl border border-border bg-muted/30 animate-pulse"
+              />
             ))}
           </div>
-        ) : integrations?.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="py-8 text-center">
-              <Cloud className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" />
-              <p className="text-sm text-muted-foreground">
-                No cloud storage accounts connected yet.
-              </p>
-            </CardContent>
-          </Card>
+        ) : !integrations || integrations.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border bg-muted/20 py-12 text-center">
+            <Cloud className="mx-auto h-8 w-8 text-muted-foreground/40 mb-3" />
+            <p className="text-sm font-medium text-muted-foreground">No accounts connected</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">
+              Connect a provider above to get started.
+            </p>
+          </div>
         ) : (
           <div className="space-y-3">
-            {integrations?.map((integration) => (
-              <Card key={integration.id}>
-                <CardContent className="p-4">
+            {integrations.map((integration) => {
+              const meta = providerMeta[integration.provider as Provider];
+              const Icon = meta?.icon ?? Cloud;
+
+              return (
+                <div
+                  key={integration.id}
+                  className="rounded-xl border border-border bg-card p-4"
+                >
                   <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                    <div className="flex items-center gap-4 flex-1 min-w-0">
-                      <div className="p-2 rounded-lg bg-muted shrink-0">
-                        {providerIcons[integration.provider]}
+                    {/* Left: Icon + Info */}
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className={`p-2 rounded-lg ${meta?.bgColor ?? "bg-muted"} shrink-0`}>
+                        <Icon className={`h-4 w-4 ${meta?.color ?? "text-muted-foreground"}`} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium">
-                            {providerLabels[integration.provider]}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium text-sm">
+                            {meta?.label ?? integration.provider}
                           </span>
-                          <Badge 
+                          <Badge
                             variant={integration.isActive ? "default" : "secondary"}
                             className="text-xs"
                           >
                             {integration.isActive ? "Active" : "Inactive"}
                           </Badge>
+                          {integration.syncError && (
+                            <span className="inline-flex items-center gap-1 text-xs text-destructive">
+                              <AlertCircle className="h-3 w-3" />
+                              Sync error
+                            </span>
+                          )}
                         </div>
-                        <p className="text-sm text-muted-foreground truncate">
-                          {integration.providerAccountEmail}
-                        </p>
-                        {integration.syncError && (
-                          <div className="flex items-center gap-1.5 mt-1 text-destructive text-xs">
-                            <AlertCircle className="h-3.5 w-3.5" />
-                            <span>Sync error</span>
-                          </div>
+                        {integration.providerAccountEmail && (
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                            {integration.providerAccountEmail}
+                          </p>
                         )}
                       </div>
                     </div>
-                    
-                    <div className="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0">
+
+                    {/* Right: Date + Actions */}
+                    <div className="flex items-center justify-between sm:justify-end gap-3 pl-0 sm:pl-2 border-t sm:border-t-0 pt-3 sm:pt-0 mt-0">
                       {integration.lastSyncedAt && (
-                        <span className="text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Calendar className="h-3 w-3" />
                           {new Date(integration.lastSyncedAt).toLocaleDateString()}
                         </span>
                       )}
@@ -277,30 +302,34 @@ export default function IntegrationsSettings() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
                           onClick={() => handleSync(integration.id)}
                           disabled={syncIntegration.isPending}
+                          title="Sync now"
                         >
-                          <RefreshCw className={`h-4 w-4 ${syncIntegration.isPending ? "animate-spin" : ""}`} />
+                          <RefreshCw
+                            className={`h-3.5 w-3.5 ${syncIntegration.isPending ? "animate-spin" : ""}`}
+                          />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
                           onClick={() => handleDisconnect(integration.id, integration.provider)}
                           disabled={deleteIntegration.isPending}
+                          title="Disconnect"
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <Unplug className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                </div>
+              );
+            })}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
