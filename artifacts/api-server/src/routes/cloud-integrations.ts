@@ -1250,129 +1250,159 @@ async function performExport(
   isPage: boolean,
   targetFolderId?: string
 ): Promise<{ success: boolean; providerFileId?: string }> {
+  console.log(`[Export] Starting export for ${isPage ? "page" : "source"} ${sourceId} to ${integration.provider}. Target: ${targetFolderId || "root"}`);
+  
   let fileName: string;
   let fileBuffer: Buffer | null = null;
   let mimeType: string;
   let isFolder = false;
 
-  if (isPage) {
-    const [page] = await db
-      .select()
-      .from(pagesTable)
-      .where(and(eq(pagesTable.id, sourceId), eq(pagesTable.userId, userId)));
-    if (!page) throw new Error("Page not found");
-    fileName = page.title;
-    mimeType = "application/vnd.google-apps.folder";
-    isFolder = true;
-  } else {
-    const [source] = await db
-      .select()
-      .from(sourcesTable)
-      .where(and(eq(sourcesTable.id, sourceId), eq(sourcesTable.userId, userId)));
-    if (!source) throw new Error("Source not found");
-
-    fileName = source.title;
-    mimeType = source.mediaMimeType || "text/plain";
-
-    if (source.mediaPath) {
-      const response = await fetch(source.mediaPath);
-      if (!response.ok) throw new Error("Failed to fetch media from storage");
-      fileBuffer = Buffer.from(await response.arrayBuffer());
+  try {
+    if (isPage) {
+      const [page] = await db
+        .select()
+        .from(pagesTable)
+        .where(and(eq(pagesTable.id, sourceId), eq(pagesTable.userId, userId)));
+      if (!page) throw new Error(`Page ${sourceId} not found`);
+      fileName = page.title;
+      mimeType = "application/vnd.google-apps.folder";
+      isFolder = true;
     } else {
-      fileBuffer = Buffer.from(source.content || "");
-      if (!fileName.includes(".")) fileName += ".txt";
-      mimeType = "text/plain";
+      const [source] = await db
+        .select()
+        .from(sourcesTable)
+        .where(and(eq(sourcesTable.id, sourceId), eq(sourcesTable.userId, userId)));
+      if (!source) throw new Error(`Source ${sourceId} not found`);
+
+      fileName = source.title;
+      mimeType = source.mediaMimeType || "text/plain";
+
+      if (source.mediaPath) {
+        console.log(`[Export] Fetching media from ${source.mediaPath}`);
+        const response = await fetch(source.mediaPath);
+        if (!response.ok) throw new Error(`Failed to fetch media from storage (${response.status} ${response.statusText})`);
+        fileBuffer = Buffer.from(await response.arrayBuffer());
+      } else {
+        fileBuffer = Buffer.from(source.content || "");
+        if (!fileName.includes(".")) fileName += ".txt";
+        mimeType = "text/plain";
+      }
     }
+
+    let providerFileId: string | undefined;
+
+    if (integration.provider === "google_drive") {
+      const metadata: any = {
+        name: fileName,
+        parents: targetFolderId ? [targetFolderId] : undefined,
+      };
+
+      if (isFolder) {
+        metadata.mimeType = "application/vnd.google-apps.folder";
+        console.log(`[Export] Creating Google Drive folder: ${fileName}`);
+        const response = await fetch("https://www.googleapis.com/drive/v3/files", {
+          method: "POST",
+          headers: { 
+            Authorization: `Bearer ${integration.accessToken}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(metadata),
+        });
+
+        if (!response.ok) {
+          const err = await response.text();
+          throw new Error(`Google Drive folder creation failed: ${err}`);
+        }
+        const result = await response.json();
+        providerFileId = result.id;
+      } else {
+        console.log(`[Export] Uploading file to Google Drive: ${fileName} (${mimeType})`);
+        // Google Drive multipart/related upload
+        const boundary = "-------eden_export_boundary";
+        const delimiter = "\r\n--" + boundary + "\r\n";
+        const closeDelimiter = "\r\n--" + boundary + "--";
+
+        const metadataPart = "Content-Type: application/json\r\n\r\n" + JSON.stringify(metadata);
+        const mediaPart = `Content-Type: ${mimeType}\r\nContent-Transfer-Encoding: base64\r\n\r\n${fileBuffer?.toString("base64")}`;
+
+        const multipartBody = delimiter + metadataPart + delimiter + mediaPart + closeDelimiter;
+
+        const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+          method: "POST",
+          headers: { 
+            Authorization: `Bearer ${integration.accessToken}`,
+            "Content-Type": `multipart/related; boundary=${boundary}`
+          },
+          body: multipartBody,
+        });
+
+        if (!response.ok) {
+          const err = await response.text();
+          throw new Error(`Google Drive upload failed: ${err}`);
+        }
+        const result = await response.json();
+        providerFileId = result.id;
+      }
+    } else if (integration.provider === "dropbox") {
+      const path = ((!targetFolderId || targetFolderId === "/") ? "" : targetFolderId) + "/" + fileName;
+      
+      if (isFolder) {
+        console.log(`[Export] Creating Dropbox folder: ${path}`);
+        const response = await fetch("https://api.dropboxapi.com/2/files/create_folder_v2", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${integration.accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ path, autorename: true }),
+        });
+        if (!response.ok) throw new Error(`Dropbox folder creation failed: ${await response.text()}`);
+        const result = await response.json();
+        providerFileId = result.metadata.path_display;
+      } else {
+        console.log(`[Export] Uploading file to Dropbox: ${path}`);
+        const response = await fetch("https://content.dropboxapi.com/2/files/upload", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${integration.accessToken}`,
+            "Dropbox-API-Arg": JSON.stringify({ path, mode: "add", autorename: true }),
+            "Content-Type": "application/octet-stream",
+          },
+          body: fileBuffer,
+        });
+        if (!response.ok) throw new Error(`Dropbox upload failed: ${await response.text()}`);
+        const result = await response.json();
+        providerFileId = result.path_display;
+      }
+    }
+
+    // Recursive step: if it's a folder, export all children
+    if (isFolder && providerFileId) {
+      console.log(`[Export] Recursively exporting contents of ${fileName} to ${providerFileId}`);
+      // Export children sources
+      const sources = await db
+        .select()
+        .from(sourcesTable)
+        .where(and(eq(sourcesTable.parentPageId, sourceId), eq(sourcesTable.userId, userId)));
+      for (const source of sources) {
+        await performExport(userId, integration, source.id, false, providerFileId);
+      }
+
+      // Export children pages
+      const pages = await db
+        .select()
+        .from(pagesTable)
+        .where(and(eq(pagesTable.parentId, sourceId), eq(pagesTable.userId, userId)));
+      for (const childPage of pages) {
+        await performExport(userId, integration, childPage.id, true, providerFileId);
+      }
+    }
+
+    return { success: true, providerFileId };
+  } catch (error) {
+    console.error(`[Export Error] ${isPage ? "Page" : "Source"} ${sourceId}:`, error);
+    throw error;
   }
-
-  let providerFileId: string | undefined;
-
-  if (integration.provider === "google_drive") {
-    const metadata: any = {
-      name: fileName,
-      parents: targetFolderId ? [targetFolderId] : undefined,
-    };
-
-    if (isFolder) {
-      metadata.mimeType = "application/vnd.google-apps.folder";
-    }
-
-    const formData = new FormData();
-    formData.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
-    if (fileBuffer) {
-      formData.append("file", new Blob([fileBuffer], { type: mimeType }));
-    }
-
-    const url = isFolder 
-      ? "https://www.googleapis.com/drive/v3/files" 
-      : "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${integration.accessToken}` },
-      body: isFolder ? JSON.stringify(metadata) : formData,
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`Google Drive upload failed: ${err}`);
-    }
-
-    const result = await response.json();
-    providerFileId = result.id;
-  } else if (integration.provider === "dropbox") {
-    if (isFolder) {
-      const path = (targetFolderId === "/" ? "" : (targetFolderId || "")) + "/" + fileName;
-      const response = await fetch("https://api.dropboxapi.com/2/files/create_folder_v2", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${integration.accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ path, autorename: true }),
-      });
-      if (!response.ok) throw new Error(`Dropbox folder creation failed: ${await response.text()}`);
-      const result = await response.json();
-      providerFileId = result.metadata.id;
-    } else {
-      const path = (targetFolderId === "/" ? "" : (targetFolderId || "")) + "/" + fileName;
-      const response = await fetch("https://content.dropboxapi.com/2/files/upload", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${integration.accessToken}`,
-          "Dropbox-API-Arg": JSON.stringify({ path, mode: "add", autorename: true }),
-          "Content-Type": "application/octet-stream",
-        },
-        body: fileBuffer,
-      });
-      if (!response.ok) throw new Error(`Dropbox upload failed: ${await response.text()}`);
-      const result = await response.json();
-      providerFileId = result.id;
-    }
-  }
-
-  // Recursive step: if it's a folder, export all children
-  if (isFolder && providerFileId) {
-    // Export children sources
-    const sources = await db
-      .select()
-      .from(sourcesTable)
-      .where(and(eq(sourcesTable.parentPageId, sourceId), eq(sourcesTable.userId, userId)));
-    for (const source of sources) {
-      await performExport(userId, integration, source.id, false, providerFileId);
-    }
-
-    // Export children pages
-    const pages = await db
-      .select()
-      .from(pagesTable)
-      .where(and(eq(pagesTable.parentId, sourceId), eq(pagesTable.userId, userId)));
-    for (const childPage of pages) {
-      await performExport(userId, integration, childPage.id, true, providerFileId);
-    }
-  }
-
-  return { success: true, providerFileId };
 }
 
 // POST /cloud/integrations/:id/export - Export Eden source to cloud storage

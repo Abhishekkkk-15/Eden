@@ -15,6 +15,7 @@ import {
   File,
   FileSpreadsheet,
   Eye,
+  Cloud,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +41,7 @@ interface PhotoFolderProps {
   onClick?: () => void;
   onRename?: () => void;
   onDelete?: () => void;
+  onExport?: () => void;
   isDragging?: boolean;
   isDropTarget?: boolean;
   draggable?: boolean;
@@ -102,6 +104,7 @@ export function PhotoFolder({
   onClick,
   onRename,
   onDelete,
+  onExport,
   isDragging,
   isDropTarget,
   draggable,
@@ -337,6 +340,10 @@ export function PhotoFolder({
                     <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRename?.(); }}>
                       <Pencil className="h-4 w-4 mr-2" />
                       Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onExport?.(); }}>
+                      <Cloud className="h-4 w-4 mr-2 text-blue-500" />
+                      Export to Cloud
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"
