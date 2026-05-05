@@ -9,6 +9,8 @@ import {
   useDeletePage,
   useUpdateSource,
   useDeleteSource,
+  useSearchWorkspace,
+  getSearchWorkspaceQueryKey,
   type Page,
   type Source,
 } from "@workspace/api-client-react";
@@ -664,8 +666,11 @@ function CloudImportButton({ parentId }: { parentId: number | null }) {
 }
 
 /** Keep `q` (and other params) when opening folders or returning to root. */
-function sourcesPathForFolder(targetFolderId: number | null): string {
+function sourcesPathForFolder(targetFolderId: number | null, clearSearch = true): string {
   const params = new URLSearchParams(window.location.search);
+  if (clearSearch) {
+    params.delete("q");
+  }
   if (targetFolderId == null) {
     params.delete("folder");
   } else {
@@ -699,6 +704,20 @@ export default function SourcesList() {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   const [folderId, setFolderId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("q") || "";
+  });
+
+  const { data: searchResults, isLoading: searchLoading } = useSearchWorkspace(
+    { q: searchQuery },
+    {
+      query: {
+        enabled: !!searchQuery.trim(),
+        queryKey: getSearchWorkspaceQueryKey({ q: searchQuery }),
+      },
+    }
+  );
 
   // Keyboard shortcuts
   useSourceShortcuts({
@@ -736,26 +755,37 @@ export default function SourcesList() {
   }, []);
 
   const handleNavigate = useCallback((targetFolderId: number | null) => {
-    setLocation(sourcesPathForFolder(targetFolderId));
+    setLocation(sourcesPathForFolder(targetFolderId, true));
     setFolderId(targetFolderId);
+    setSearchQuery("");
   }, [setLocation]);
 
   useEffect(() => {
-    const syncFolderId = () => {
+    const syncParams = () => {
       const params = new URLSearchParams(window.location.search);
-      const raw = params.get("folder");
-      const parsed = raw ? Number(raw) : null;
-      const nextId = parsed && Number.isFinite(parsed) ? parsed : null;
-      setFolderId(nextId);
+      
+      // Sync folder
+      const rawFolder = params.get("folder");
+      const parsedFolder = rawFolder ? Number(rawFolder) : null;
+      const nextFolderId = parsedFolder && Number.isFinite(parsedFolder) ? parsedFolder : null;
+      if (nextFolderId !== folderId) setFolderId(nextFolderId);
+      
+      // Sync search
+      const nextQ = params.get("q") || "";
+      if (nextQ !== searchQuery) setSearchQuery(nextQ);
     };
 
     // Initial sync
-    syncFolderId();
+    syncParams();
 
-    // Sync on back/forward
-    window.addEventListener("popstate", syncFolderId);
-    return () => window.removeEventListener("popstate", syncFolderId);
-  }, []); // Run once on mount
+    // Sync on back/forward or custom event
+    window.addEventListener("popstate", syncParams);
+    window.addEventListener("eden:url-change", syncParams);
+    return () => {
+      window.removeEventListener("popstate", syncParams);
+      window.removeEventListener("eden:url-change", syncParams);
+    };
+  }, [folderId, searchQuery]);
 
   const sourceList = Array.isArray(sources) ? sources : [];
   const folderPages =
@@ -766,21 +796,37 @@ export default function SourcesList() {
       (folderPages.find((folder) => folder.id === folderId) ?? null)
     );
 
-  const childFolders = useMemo(
-    () =>
-      folderPages
-        .filter((folder) => (folder.parentId ?? null) === folderId)
-        .sort((a, b) =>
-          a.position === b.position ? a.id - b.id : a.position - b.position,
-        ),
-    [folderId, folderPages],
-  );
+  const childFolders = useMemo(() => {
+    if (searchQuery.trim()) {
+      if (!searchResults) return [];
+      const pageIds = new Set(
+        searchResults
+          .filter((h) => h.kind === "page" || h.kind === "block")
+          .map((h) => h.pageId || h.refId)
+      );
+      return folderPages.filter((p) => pageIds.has(p.id));
+    }
+    return folderPages
+      .filter((folder) => (folder.parentId ?? null) === folderId)
+      .sort((a, b) =>
+        a.position === b.position ? a.id - b.id : a.position - b.position
+      );
+  }, [folderId, folderPages, searchQuery, searchResults]);
 
-  const childItems = useMemo(
-    () =>
-      (sourceList as SourceWithPage[]).filter((source) => (source.parentPageId ?? null) === folderId),
-    [folderId, sourceList],
-  );
+  const childItems = useMemo(() => {
+    if (searchQuery.trim()) {
+      if (!searchResults) return [];
+      const sourceIds = new Set(
+        searchResults
+          .filter((h) => h.kind === "source" || h.kind === "chunk")
+          .map((h) => h.sourceId || h.refId)
+      );
+      return (sourceList as SourceWithPage[]).filter((s) => sourceIds.has(s.id));
+    }
+    return (sourceList as SourceWithPage[]).filter(
+      (source) => (source.parentPageId ?? null) === folderId
+    );
+  }, [folderId, sourceList, searchQuery, searchResults]);
 
   const folderPreviewMap = useMemo(() => {
     const map = new Map<number, FolderPreviewItem[]>();
@@ -1089,7 +1135,7 @@ export default function SourcesList() {
                   ))}
                 </div>
                 <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
-                  {currentFolder ? currentFolder.title : "My Drive"}
+                  {searchQuery.trim() ? `Search: ${searchQuery}` : (currentFolder ? currentFolder.title : "My Drive")}
                 </h1>
                 <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-muted-foreground">
                   Organize folders, documents, and files in one library. Everything here can be
