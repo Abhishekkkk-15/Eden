@@ -135,6 +135,28 @@ async function fetchImportQueue(status?: string): Promise<ImportQueueItem[]> {
   return res.json();
 }
 
+// POST /cloud/integrations/:id/export - Export Eden source to cloud
+async function exportCloudFile(
+  integrationId: number,
+  data: {
+    sourceId: number;
+    targetFolderId?: string;
+    isPage?: boolean;
+  }
+): Promise<{ success: boolean; providerFileId: string }> {
+  const token = localStorage.getItem("token");
+  const res = await fetch(`${API_BASE_URL}/cloud/integrations/${integrationId}/export`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to export to cloud");
+  return res.json();
+}
+
 // React Query hooks
 export function useCloudIntegrations() {
   return useQuery({
@@ -209,6 +231,13 @@ export function useImportQueue(status?: string) {
   return useQuery({
     queryKey: ["import-queue", status],
     queryFn: () => fetchImportQueue(status),
+  });
+}
+
+export function useExportCloudFile() {
+  return useMutation({
+    mutationFn: ({ integrationId, data }: { integrationId: number; data: Parameters<typeof exportCloudFile>[1] }) =>
+      exportCloudFile(integrationId, data),
   });
 }
 

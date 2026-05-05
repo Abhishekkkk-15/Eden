@@ -60,6 +60,11 @@ import { BulkOperationsToolbar } from "@/components/sources/bulk-operations-tool
 import { ProcessingStatus, useProcessingJobs } from "@/components/processing-status";
 import { useSourceShortcuts, useBulkSelection } from "@/hooks/use-keyboard-shortcuts";
   import { CloudImportDialog } from "@/components/cloud/import-dialog";
+import {
+  useCloudIntegrations,
+  useExportCloudFile,
+} from "@/hooks/use-cloud-integrations";
+import { CloudExportDialog } from "@/components/cloud/export-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {cn} from "@/lib/utils.ts";
@@ -112,6 +117,7 @@ function FolderCard({
 }) {
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
   const [renameTitle, setRenameTitle] = useState(folder.title);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -206,6 +212,7 @@ function FolderCard({
         onClick={onOpen}
         onRename={() => setIsRenameOpen(true)}
         onDelete={() => setIsDeleteOpen(true)}
+        onExport={() => setIsExportOpen(true)}
         isDragging={isDragging}
         isDropTarget={isDropTarget || isDragOver}
         draggable
@@ -214,6 +221,14 @@ function FolderCard({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+      />
+
+      <CloudExportDialog
+        open={isExportOpen}
+        onOpenChange={setIsExportOpen}
+        sourceId={folder.id}
+        isPage={true}
+        fileName={folder.title}
       />
 
       <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
@@ -281,6 +296,7 @@ function SourceCard({
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isMoveOpen, setIsMoveOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
   const [renameTitle, setRenameTitle] = useState(source.title);
   const isPage = source.isPage ?? false;
 
@@ -343,6 +359,10 @@ function SourceCard({
                     <DropdownMenuItem onClick={() => setIsMoveOpen(true)}>
                       <FolderOpen className="h-4 w-4 mr-2" />
                       Move to...
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setIsExportOpen(true)}>
+                      <Cloud className="h-4 w-4 mr-2 text-blue-500" />
+                      Export to Cloud
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setIsRenameOpen(true)}>
                       <Pencil className="h-4 w-4 mr-2" />
@@ -425,6 +445,14 @@ function SourceCard({
         onOpenChange={setIsMoveOpen}
         currentFolderId={source.parentPageId}
         onMove={onMove}
+      />
+
+      <CloudExportDialog
+        open={isExportOpen}
+        onOpenChange={setIsExportOpen}
+        sourceId={source.id}
+        isPage={isPage}
+        fileName={source.title}
       />
     </>
   );

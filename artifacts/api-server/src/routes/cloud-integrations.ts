@@ -937,9 +937,14 @@ router.post("/cloud/integrations/:id/files/:fileId/ai-analyze", async (req, res)
       fileName = metadata.name;
       mimeType = metadata.mimeType;
 
+      // Try to export to text if it's a Google Doc or a type that supports it
       let downloadUrl: string;
       if (mimeType.startsWith("application/vnd.google-apps.")) {
         downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`;
+      } else if (mimeType === "application/pdf" || mimeType.includes("word") || mimeType.includes("text")) {
+        // Some regular files can also be exported by Drive if they are converted
+        // But for most, we just download as media
+        downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
       } else {
         downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
       }
@@ -947,9 +952,28 @@ router.post("/cloud/integrations/:id/files/:fileId/ai-analyze", async (req, res)
       const contentResponse = await fetch(downloadUrl, {
         headers: { Authorization: `Bearer ${integration.accessToken}` },
       });
-      if (!contentResponse.ok) throw new Error("Failed to download Google Drive content");
-      content = await contentResponse.text();
+      
+      if (!contentResponse.ok) {
+        // Fallback for PDF/Docs if export failed
+        if (downloadUrl.includes("/export")) {
+           const fallbackResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+             headers: { Authorization: `Bearer ${integration.accessToken}` },
+           });
+           if (fallbackResponse.ok) {
+             content = await fallbackResponse.text();
+           } else {
+             throw new Error("Failed to download file content (tried export and media)");
+           }
+        } else {
+          throw new Error("Failed to download Google Drive content");
+        }
+      } else {
+        content = await contentResponse.text();
+      }
     } else if (integration.provider === "dropbox") {
+      // Decode path if it was encoded by frontend
+      const path = fileId.startsWith("/") ? fileId : decodeURIComponent(fileId);
+
       // Get metadata
       const metaResponse = await fetch("https://api.dropboxapi.com/2/files/get_metadata", {
         method: "POST",
@@ -957,18 +981,21 @@ router.post("/cloud/integrations/:id/files/:fileId/ai-analyze", async (req, res)
           Authorization: `Bearer ${integration.accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ path: fileId }),
+        body: JSON.stringify({ path }),
       });
       if (!metaResponse.ok) throw new Error("Failed to get Dropbox metadata");
       const metadata = await metaResponse.json();
       fileName = metadata.name;
       
-      // Download content
+      // Download content with safe header encoding
+      const arg = JSON.stringify({ path });
+      const safeArg = arg.replace(/[^\x20-\x7E]/g, (c) => "\\u" + ("000" + c.charCodeAt(0).toString(16)).slice(-4));
+
       const contentResponse = await fetch("https://content.dropboxapi.com/2/files/download", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${integration.accessToken}`,
-          "Dropbox-API-Arg": JSON.stringify({ path: fileId }),
+          "Dropbox-API-Arg": safeArg,
         },
       });
       if (!contentResponse.ok) throw new Error("Failed to download Dropbox content");
@@ -977,8 +1004,17 @@ router.post("/cloud/integrations/:id/files/:fileId/ai-analyze", async (req, res)
       return res.status(400).json({ error: "Unsupported provider for direct analysis" });
     }
     
+    // Clean up content (remove non-printable characters if it's a binary file)
+    const cleanContent = content.replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "").trim();
+    if (cleanContent.length < 10 && content.length > 100) {
+       // Likely a binary file with no printable text
+       content = `[Note: This file appears to be a binary file (${mimeType || "unknown"}). AI analysis might be limited as no plain text could be extracted.]\n\n` + cleanContent;
+    } else {
+       content = cleanContent;
+    }
+    
     // Truncate if too long
-    const maxLength = 25000;
+    const maxLength = 30000;
     const truncatedContent = content.length > maxLength 
       ? content.slice(0, maxLength) + "\n\n[Content truncated...]" 
       : content;
@@ -993,7 +1029,7 @@ router.post("/cloud/integrations/:id/files/:fileId/ai-analyze", async (req, res)
       body: JSON.stringify({
         model: "llama-3.3-70b-versatile",
         messages: [
-          { role: "system", content: "You are a helpful assistant analyzing documents. Provide detailed insights based on the content provided." },
+          { role: "system", content: "You are a helpful assistant analyzing documents. Provide detailed insights based on the content provided. If the content looks like binary data or garbage, try to identify the file type and explain what it might be." },
           { role: "user", content: `${body.prompt}\n\nDocument: "${fileName}"\n\n${truncatedContent}` },
         ],
         max_tokens: body.maxTokens || 2000,
@@ -1203,6 +1239,179 @@ router.get("/cloud/integrations/:id/ai-tools", async (req, res) => {
   } catch (error) {
     console.error("Failed to fetch AI tools:", error);
     res.status(500).json({ error: "Failed to fetch tools" });
+  }
+});
+
+// Helper to perform export (recursively if it's a page/folder)
+async function performExport(
+  userId: number,
+  integration: any,
+  sourceId: number,
+  isPage: boolean,
+  targetFolderId?: string
+): Promise<{ success: boolean; providerFileId?: string }> {
+  let fileName: string;
+  let fileBuffer: Buffer | null = null;
+  let mimeType: string;
+  let isFolder = false;
+
+  if (isPage) {
+    const [page] = await db
+      .select()
+      .from(pagesTable)
+      .where(and(eq(pagesTable.id, sourceId), eq(pagesTable.userId, userId)));
+    if (!page) throw new Error("Page not found");
+    fileName = page.title;
+    mimeType = "application/vnd.google-apps.folder";
+    isFolder = true;
+  } else {
+    const [source] = await db
+      .select()
+      .from(sourcesTable)
+      .where(and(eq(sourcesTable.id, sourceId), eq(sourcesTable.userId, userId)));
+    if (!source) throw new Error("Source not found");
+
+    fileName = source.title;
+    mimeType = source.mediaMimeType || "text/plain";
+
+    if (source.mediaPath) {
+      const response = await fetch(source.mediaPath);
+      if (!response.ok) throw new Error("Failed to fetch media from storage");
+      fileBuffer = Buffer.from(await response.arrayBuffer());
+    } else {
+      fileBuffer = Buffer.from(source.content || "");
+      if (!fileName.includes(".")) fileName += ".txt";
+      mimeType = "text/plain";
+    }
+  }
+
+  let providerFileId: string | undefined;
+
+  if (integration.provider === "google_drive") {
+    const metadata: any = {
+      name: fileName,
+      parents: targetFolderId ? [targetFolderId] : undefined,
+    };
+
+    if (isFolder) {
+      metadata.mimeType = "application/vnd.google-apps.folder";
+    }
+
+    const formData = new FormData();
+    formData.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+    if (fileBuffer) {
+      formData.append("file", new Blob([fileBuffer], { type: mimeType }));
+    }
+
+    const url = isFolder 
+      ? "https://www.googleapis.com/drive/v3/files" 
+      : "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${integration.accessToken}` },
+      body: isFolder ? JSON.stringify(metadata) : formData,
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Google Drive upload failed: ${err}`);
+    }
+
+    const result = await response.json();
+    providerFileId = result.id;
+  } else if (integration.provider === "dropbox") {
+    if (isFolder) {
+      const path = (targetFolderId === "/" ? "" : (targetFolderId || "")) + "/" + fileName;
+      const response = await fetch("https://api.dropboxapi.com/2/files/create_folder_v2", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${integration.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ path, autorename: true }),
+      });
+      if (!response.ok) throw new Error(`Dropbox folder creation failed: ${await response.text()}`);
+      const result = await response.json();
+      providerFileId = result.metadata.id;
+    } else {
+      const path = (targetFolderId === "/" ? "" : (targetFolderId || "")) + "/" + fileName;
+      const response = await fetch("https://content.dropboxapi.com/2/files/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${integration.accessToken}`,
+          "Dropbox-API-Arg": JSON.stringify({ path, mode: "add", autorename: true }),
+          "Content-Type": "application/octet-stream",
+        },
+        body: fileBuffer,
+      });
+      if (!response.ok) throw new Error(`Dropbox upload failed: ${await response.text()}`);
+      const result = await response.json();
+      providerFileId = result.id;
+    }
+  }
+
+  // Recursive step: if it's a folder, export all children
+  if (isFolder && providerFileId) {
+    // Export children sources
+    const sources = await db
+      .select()
+      .from(sourcesTable)
+      .where(and(eq(sourcesTable.parentPageId, sourceId), eq(sourcesTable.userId, userId)));
+    for (const source of sources) {
+      await performExport(userId, integration, source.id, false, providerFileId);
+    }
+
+    // Export children pages
+    const pages = await db
+      .select()
+      .from(pagesTable)
+      .where(and(eq(pagesTable.parentId, sourceId), eq(pagesTable.userId, userId)));
+    for (const childPage of pages) {
+      await performExport(userId, integration, childPage.id, true, providerFileId);
+    }
+  }
+
+  return { success: true, providerFileId };
+}
+
+// POST /cloud/integrations/:id/export - Export Eden source to cloud storage
+router.post("/cloud/integrations/:id/export", async (req, res) => {
+  const user = (req as any).user;
+  const integrationId = parseInt(req.params.id);
+  
+  const schema = z.object({
+    sourceId: z.number(),
+    targetFolderId: z.string().optional(),
+    isPage: z.boolean().default(false),
+  });
+
+  let body;
+  try {
+    body = schema.parse(req.body);
+  } catch (error) {
+    return res.status(400).json({ error: "Invalid request body" });
+  }
+
+  try {
+    const [integration] = await db
+      .select()
+      .from(cloudIntegrationsTable)
+      .where(and(
+        eq(cloudIntegrationsTable.id, integrationId),
+        eq(cloudIntegrationsTable.userId, user.id),
+        eq(cloudIntegrationsTable.isActive, true)
+      ));
+
+    if (!integration) {
+      return res.status(404).json({ error: "Integration not found or inactive" });
+    }
+
+    const result = await performExport(user.id, integration, body.sourceId, body.isPage, body.targetFolderId);
+    res.json(result);
+  } catch (error) {
+    console.error("Export to cloud failed:", error);
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to export to cloud" });
   }
 });
 
