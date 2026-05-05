@@ -735,12 +735,27 @@ export default function SourcesList() {
     return () => window.removeEventListener("eden:clear-selection", handleClearSelection);
   }, []);
 
+  const handleNavigate = useCallback((targetFolderId: number | null) => {
+    setLocation(sourcesPathForFolder(targetFolderId));
+    setFolderId(targetFolderId);
+  }, [setLocation]);
+
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const raw = params.get("folder");
-    const parsed = raw ? Number(raw) : null;
-    setFolderId(parsed && Number.isFinite(parsed) ? parsed : null);
-  }, [location]); // Re-run when route changes
+    const syncFolderId = () => {
+      const params = new URLSearchParams(window.location.search);
+      const raw = params.get("folder");
+      const parsed = raw ? Number(raw) : null;
+      const nextId = parsed && Number.isFinite(parsed) ? parsed : null;
+      setFolderId(nextId);
+    };
+
+    // Initial sync
+    syncFolderId();
+
+    // Sync on back/forward
+    window.addEventListener("popstate", syncFolderId);
+    return () => window.removeEventListener("popstate", syncFolderId);
+  }, []); // Run once on mount
 
   const sourceList = Array.isArray(sources) ? sources : [];
   const folderPages =
@@ -1066,7 +1081,7 @@ export default function SourcesList() {
                       : null}
                       <button
                         type="button"
-                        onClick={() => setLocation(sourcesPathForFolder(crumb.id))}
+                        onClick={() => handleNavigate(crumb.id)}
                         className="truncate text-left hover:text-foreground transition-colors">
                         {crumb.title}
                       </button>
@@ -1202,7 +1217,7 @@ export default function SourcesList() {
                     <FolderCard
                       key={folder.id}
                       folder={folder}
-                      onOpen={() => setLocation(sourcesPathForFolder(folder.id))}
+                      onOpen={() => handleNavigate(folder.id)}
                       onDrop={(item) => handleFolderDrop(folder.id, item)}
                       onRename={(newTitle) => handleFolderRename(folder.id, newTitle)}
                       onDelete={() => handleFolderDelete(folder.id)}
