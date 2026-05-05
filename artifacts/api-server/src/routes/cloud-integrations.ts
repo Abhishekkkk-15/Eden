@@ -923,52 +923,62 @@ router.post("/cloud/integrations/:id/files/:fileId/ai-analyze", async (req, res)
       return res.status(404).json({ error: "Integration not found" });
     }
 
-    // Download file content
-    const metaResponse = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType,size`,
-      { headers: { Authorization: `Bearer ${integration.accessToken}` } }
-    );
+    let fileName = "file";
+    let content = "";
+    let mimeType = "";
 
-    if (!metaResponse.ok) {
-      throw new Error("Failed to get file metadata");
-    }
+    if (integration.provider === "google_drive") {
+      const metaResponse = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType,size`,
+        { headers: { Authorization: `Bearer ${integration.accessToken}` } }
+      );
+      if (!metaResponse.ok) throw new Error("Failed to get Google Drive metadata");
+      const metadata = await metaResponse.json();
+      fileName = metadata.name;
+      mimeType = metadata.mimeType;
 
-    const metadata = await metaResponse.json();
+      let downloadUrl: string;
+      if (mimeType.startsWith("application/vnd.google-apps.")) {
+        downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`;
+      } else {
+        downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+      }
 
-    // Only analyze text-based files for now
-    const textMimeTypes = [
-      "text/plain", "text/html", "text/csv", 
-      "application/json", "application/pdf",
-      "application/vnd.google-apps.document"
-    ];
-    
-    if (!textMimeTypes.some(t => metadata.mimeType?.includes(t) || metadata.mimeType?.startsWith("text/"))) {
-      return res.status(400).json({ 
-        error: "File type not supported for AI analysis", 
-        mimeType: metadata.mimeType 
+      const contentResponse = await fetch(downloadUrl, {
+        headers: { Authorization: `Bearer ${integration.accessToken}` },
       });
-    }
-
-    // Get file content
-    let downloadUrl: string;
-    if (metadata.mimeType.startsWith("application/vnd.google-apps.")) {
-      downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`;
+      if (!contentResponse.ok) throw new Error("Failed to download Google Drive content");
+      content = await contentResponse.text();
+    } else if (integration.provider === "dropbox") {
+      // Get metadata
+      const metaResponse = await fetch("https://api.dropboxapi.com/2/files/get_metadata", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${integration.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ path: fileId }),
+      });
+      if (!metaResponse.ok) throw new Error("Failed to get Dropbox metadata");
+      const metadata = await metaResponse.json();
+      fileName = metadata.name;
+      
+      // Download content
+      const contentResponse = await fetch("https://content.dropboxapi.com/2/files/download", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${integration.accessToken}`,
+          "Dropbox-API-Arg": JSON.stringify({ path: fileId }),
+        },
+      });
+      if (!contentResponse.ok) throw new Error("Failed to download Dropbox content");
+      content = await contentResponse.text();
     } else {
-      downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+      return res.status(400).json({ error: "Unsupported provider for direct analysis" });
     }
-
-    const contentResponse = await fetch(downloadUrl, {
-      headers: { Authorization: `Bearer ${integration.accessToken}` },
-    });
-
-    if (!contentResponse.ok) {
-      throw new Error("Failed to download file content");
-    }
-
-    const content = await contentResponse.text();
     
     // Truncate if too long
-    const maxLength = 15000;
+    const maxLength = 25000;
     const truncatedContent = content.length > maxLength 
       ? content.slice(0, maxLength) + "\n\n[Content truncated...]" 
       : content;
@@ -983,8 +993,8 @@ router.post("/cloud/integrations/:id/files/:fileId/ai-analyze", async (req, res)
       body: JSON.stringify({
         model: "llama-3.3-70b-versatile",
         messages: [
-          { role: "system", content: "You are a helpful assistant analyzing documents." },
-          { role: "user", content: `${body.prompt}\n\nDocument: "${metadata.name}"\n\n${truncatedContent}` },
+          { role: "system", content: "You are a helpful assistant analyzing documents. Provide detailed insights based on the content provided." },
+          { role: "user", content: `${body.prompt}\n\nDocument: "${fileName}"\n\n${truncatedContent}` },
         ],
         max_tokens: body.maxTokens || 2000,
       }),
@@ -999,7 +1009,7 @@ router.post("/cloud/integrations/:id/files/:fileId/ai-analyze", async (req, res)
 
     res.json({
       fileId,
-      fileName: metadata.name,
+      fileName,
       analysis,
       contentLength: content.length,
     });

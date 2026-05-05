@@ -898,10 +898,20 @@ export function CloudFileBrowser({
                         <Button
                           size="sm"
                           variant="ghost"
+                          onClick={() => openAIAnalysis(file)}
+                          className="h-8 w-8 p-0"
+                          title="AI Insights (No Import)"
+                        >
+                          <Sparkles className="w-4 h-4 text-purple-500" />
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="ghost"
                           onClick={() => handleImport(file)}
                           disabled={importingFile === file.id || importFile.isPending}
                           className="h-8 w-8 p-0"
-                          title="Import to Eden"
+                          title="Import to Eden (Full AI Features)"
                         >
                           {importingFile === file.id ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
