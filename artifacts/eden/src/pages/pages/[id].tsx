@@ -55,6 +55,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SourceCreateDialog } from "@/components/sources/source-create-dialog";
 import { streamChat } from "@/lib/ai";
+import { cn } from "@/lib/utils";
 
 interface BlockTypeOption {
   type: BlockType;
@@ -64,7 +65,7 @@ interface BlockTypeOption {
 }
 
 const BLOCK_TYPES: BlockTypeOption[] = [
-  { type: "ai", label: "Ask AI", icon: Sparkles, hint: "Generate with AI" },
+  { type: "ai" as any, label: "Ask AI", icon: Sparkles, hint: "Generate with AI" },
   { type: "text", label: "Text", icon: TextIcon, hint: "Plain paragraph" },
   { type: "heading1", label: "Heading 1", icon: Heading1, hint: "Section title" },
   { type: "heading2", label: "Heading 2", icon: Heading2, hint: "Subsection" },
@@ -78,7 +79,7 @@ const BLOCK_TYPES: BlockTypeOption[] = [
 ];
 
 function placeholderFor(type: BlockType): string {
-  switch (type) {
+  switch (type as any) {
     case "ai":
       return "What's on your mind?";
     case "heading1":
@@ -105,7 +106,7 @@ function placeholderFor(type: BlockType): string {
 }
 
 function classesFor(type: BlockType): string {
-  switch (type) {
+  switch (type as any) {
     case "ai":
       return "text-base font-medium text-primary";
     case "heading1":
@@ -287,7 +288,7 @@ function BlockRow({
         </span>
       )}
 
-      {block.type === "ai" ? (
+      {(block.type as string) === "ai" ? (
         <div className="flex-1 relative flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20 shadow-[0_0_15px_rgba(var(--primary),0.05)]">
           <Sparkles className="w-4 h-4 text-primary shrink-0" />
           <input
@@ -337,7 +338,7 @@ function BlockRow({
                     onClick={() => pickType(opt.type)}
                     className="w-full flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent text-left"
                   >
-                    <Icon className={cn("h-4 w-4", opt.type === 'ai' ? "text-primary" : "text-muted-foreground")} />
+                    <Icon className={cn("h-4 w-4", (opt.type as string) === 'ai' ? "text-primary" : "text-muted-foreground")} />
                     <span className="flex-1">{opt.label}</span>
                     <span className="text-xs text-muted-foreground">{opt.hint}</span>
                   </button>
