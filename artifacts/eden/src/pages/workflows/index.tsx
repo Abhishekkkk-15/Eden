@@ -12,6 +12,7 @@ import {
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useListPages } from "@workspace/api-client-react";
 import {
   Dialog,
   DialogContent,
@@ -48,12 +49,14 @@ import {
   Upload,
   Edit3,
   Bot,
+  X,
+  FolderOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 type TriggerType = "source_created" | "source_updated" | "scheduled" | "manual";
-type ActionType = "tag" | "move_to_folder" | "summarize" | "transcribe" | "extract_entities" | "send_notification" | "webhook" | "ai_transform";
+type ActionType = "tag" | "generate_tags" | "move_to_folder" | "ai_organize" | "summarize" | "transcribe" | "extract_entities" | "send_notification" | "webhook" | "ai_transform";
 
 interface WorkflowAction {
   type: ActionType;
@@ -78,7 +81,9 @@ const triggerLabels: Record<TriggerType, string> = {
 
 const actionIcons: Record<ActionType, React.ReactNode> = {
   tag: <Tag className="w-4 h-4" />,
+  generate_tags: <Sparkles className="w-4 h-4 text-purple-500" />,
   move_to_folder: <Folder className="w-4 h-4" />,
+  ai_organize: <FolderOpen className="w-4 h-4 text-blue-500" />,
   summarize: <Sparkles className="w-4 h-4" />,
   transcribe: <Bot className="w-4 h-4" />,
   extract_entities: <Zap className="w-4 h-4" />,
@@ -88,8 +93,10 @@ const actionIcons: Record<ActionType, React.ReactNode> = {
 };
 
 const actionLabels: Record<ActionType, string> = {
-  tag: "Add tags",
-  move_to_folder: "Move to folder",
+  tag: "Add manual tags",
+  generate_tags: "AI auto-generate tags",
+  move_to_folder: "Move to specific folder",
+  ai_organize: "AI auto-organize into folders",
   summarize: "Generate summary",
   transcribe: "Transcribe media",
   extract_entities: "Extract entities",
@@ -314,6 +321,9 @@ interface WorkflowBuilderProps {
 }
 
 function WorkflowBuilder({ initialWorkflow, onSave, onCancel, onDelete, onRun }: WorkflowBuilderProps) {
+  const { data: pages } = useListPages();
+  const folders = Array.isArray(pages) ? pages.filter(p => p.kind === "folder") : [];
+  
   const [name, setName] = useState(initialWorkflow?.name ?? "");
   const [description, setDescription] = useState(initialWorkflow?.description ?? "");
   const [emoji, setEmoji] = useState(initialWorkflow?.emoji ?? "🤖");
@@ -328,7 +338,9 @@ function WorkflowBuilder({ initialWorkflow, onSave, onCancel, onDelete, onRun }:
   const handleAddAction = (type: ActionType) => {
     const defaultConfig: Record<ActionType, Record<string, unknown>> = {
       tag: { tags: [] },
+      generate_tags: {},
       move_to_folder: { folderId: null },
+      ai_organize: { autoCreate: false },
       summarize: { maxLength: 300 },
       transcribe: {},
       extract_entities: { entityTypes: ["person", "organization", "location"] },
@@ -438,19 +450,115 @@ function WorkflowBuilder({ initialWorkflow, onSave, onCancel, onDelete, onRun }:
                   {actions.map((action, index) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between p-3 border rounded-lg"
+                      className="space-y-3 p-3 border rounded-lg"
                     >
-                      <div className="flex items-center gap-2">
-                        {actionIcons[action.type]}
-                        <span>{actionLabels[action.type]}</span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {actionIcons[action.type]}
+                          <span className="font-medium">{actionLabels[action.type]}</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveAction(index)}
+                        >
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveAction(index)}
-                      >
-                        <Trash2 className="w-4 h-4 text-red-500" />
-                      </Button>
+
+                      {action.type === "tag" && (
+                        <div className="space-y-2 pt-2 border-t">
+                          <Label className="text-xs">Tags to add</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="e.g. urgent, project-x"
+                              className="h-8 text-xs"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  const val = e.currentTarget.value.trim();
+                                  if (val) {
+                                    const currentTags = (action.config.tags as string[]) || [];
+                                    if (!currentTags.includes(val)) {
+                                      const newActions = [...actions];
+                                      newActions[index] = {
+                                        ...action,
+                                        config: { ...action.config, tags: [...currentTags, val] }
+                                      };
+                                      setActions(newActions);
+                                    }
+                                    e.currentTarget.value = "";
+                                  }
+                                }
+                              }}
+                            />
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {((action.config.tags as string[]) || []).map((tag) => (
+                              <Badge key={tag} variant="secondary" className="px-1.5 py-0 text-[10px] flex items-center gap-1">
+                                {tag}
+                                <X 
+                                  className="w-3 h-3 cursor-pointer hover:text-destructive" 
+                                  onClick={() => {
+                                    const currentTags = (action.config.tags as string[]) || [];
+                                    const newActions = [...actions];
+                                    newActions[index] = {
+                                      ...action,
+                                      config: { ...action.config, tags: currentTags.filter(t => t !== tag) }
+                                    };
+                                    setActions(newActions);
+                                  }}
+                                />
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {action.type === "generate_tags" && (
+                        <div className="space-y-1 pt-2 border-t">
+                          <p className="text-[10px] text-muted-foreground italic">
+                            AI will analyze the content and automatically assign relevant tags.
+                          </p>
+                        </div>
+                      )}
+
+                      {action.type === "ai_organize" && (
+                        <div className="space-y-1 pt-2 border-t">
+                          <p className="text-[10px] text-muted-foreground italic">
+                            AI will intelligently move files into the most relevant existing folder.
+                          </p>
+                        </div>
+                      )}
+
+                      {action.type === "move_to_folder" && (
+                        <div className="space-y-2 pt-2 border-t">
+                          <Label className="text-xs">Target Folder</Label>
+                          <Select
+                            value={action.config.folderId?.toString() || "null"}
+                            onValueChange={(val) => {
+                              const newActions = [...actions];
+                              newActions[index] = {
+                                ...action,
+                                config: { ...action.config, folderId: val === "null" ? null : parseInt(val) }
+                              };
+                              setActions(newActions);
+                            }}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder="Select folder..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="null">My Drive (root)</SelectItem>
+                              {folders.map((f) => (
+                                <SelectItem key={f.id} value={f.id.toString()}>
+                                  {f.emoji || "📁"} {f.title}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

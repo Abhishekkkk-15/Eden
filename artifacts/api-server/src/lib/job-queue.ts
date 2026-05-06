@@ -1,6 +1,6 @@
 import { db, jobQueueTable, sourcesTable, transcriptionsTable, sourceChunksTable } from "@workspace/db";
 import { eq, and, asc, lte } from "drizzle-orm";
-import { summarize, completeText } from "./ai";
+import { summarize, completeText, extractEntities } from "./ai";
 import { transcribeSource } from "./transcription";
 
 // Job processor configuration
@@ -110,6 +110,9 @@ async function processJob(jobId: number) {
           break;
         case "generate_summary":
           result = await processSummaryJob(job);
+          break;
+        case "extract_entities":
+          result = await processEntityExtractionJob(job);
           break;
         case "ai_transform":
           result = await processAITransformJob(job);
@@ -342,6 +345,44 @@ async function processAITransformJob(job: typeof jobQueueTable.$inferSelect) {
   await updateJobProgress(job.id, 100, "Complete");
 
   return { transformed: true, outputLength: result.length };
+}
+
+/**
+ * Process entity extraction job
+ */
+async function processEntityExtractionJob(job: typeof jobQueueTable.$inferSelect) {
+  const { entityId } = job;
+  const payload = job.payload as { entityTypes?: string[] };
+
+  await updateJobProgress(job.id, 20, "Fetching source content...");
+
+  const [source] = await db
+    .select()
+    .from(sourcesTable)
+    .where(eq(sourcesTable.id, entityId));
+
+  if (!source) throw new Error("Source not found");
+  if (!source.content) throw new Error("Source has no content to analyze");
+
+  await updateJobProgress(job.id, 50, "Extracting entities...");
+
+  const entities = await extractEntities(source.content, payload.entityTypes);
+
+  await updateJobProgress(job.id, 80, "Saving extracted information...");
+
+  // Update source summary with entities
+  const newSummary = source.summary 
+    ? `${source.summary}\n\n### Extracted Entities\n${entities}`
+    : `### Extracted Entities\n${entities}`;
+
+  await db
+    .update(sourcesTable)
+    .set({ summary: newSummary })
+    .where(eq(sourcesTable.id, entityId));
+
+  await updateJobProgress(job.id, 100, "Complete");
+
+  return { entitiesLength: entities.length };
 }
 
 /**

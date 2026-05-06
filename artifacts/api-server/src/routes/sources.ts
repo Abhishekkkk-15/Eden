@@ -44,6 +44,17 @@ type SourceListRow = {
 };
 
 function toSourceResponse(row: SourceListRow) {
+  let tags: string[] = [];
+  try {
+    if (typeof row.tags === "string") {
+      tags = JSON.parse(row.tags);
+    } else if (Array.isArray(row.tags)) {
+      tags = row.tags;
+    }
+  } catch (e) {
+    console.error("[toSourceResponse] Failed to parse tags:", e);
+  }
+
   return {
     id: row.id,
     kind: row.kind,
@@ -59,7 +70,7 @@ function toSourceResponse(row: SourceListRow) {
     status: row.status,
     createdAt: row.createdAt,
     isPage: row.isPage ?? false,
-    tags: row.tags || [],
+    tags: tags.filter(t => t !== null),
   };
 }
 
@@ -89,7 +100,7 @@ router.get("/sources", async (req, res) => {
         s.summary, s.status, s.created_at,
         (SELECT count(*) FROM source_chunks c WHERE c.source_id = s.id) AS chunk_count,
         false as is_page,
-        (SELECT json_agg(st.tag) FROM source_tags st WHERE st.source_id = s.id) AS tags
+        COALESCE((SELECT json_agg(st.tag) FROM source_tags st WHERE st.source_id = s.id), '[]'::json) AS tags
       FROM sources s
       WHERE s.user_id = ${user.id}
       UNION ALL

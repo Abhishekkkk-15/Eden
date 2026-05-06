@@ -90,3 +90,44 @@ export async function describeImageDataUrl(dataUrl: string): Promise<string> {
 
   return res.choices?.[0]?.message?.content?.trim() ?? "";
 }
+
+export async function generateTags(text: string): Promise<string[]> {
+  if (!text || text.length < 50) return [];
+  const response = await completeText({
+    system: "You are a professional categorization expert. Given a text content, extract 3-6 relevant keywords/tags that describe the main topics. Reply ONLY with a comma-separated list of tags. No other text.",
+    user: `Extract tags for this content:\n\n${text.slice(0, 5000)}`,
+    maxTokens: 100,
+  });
+  return response.split(",").map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
+}
+
+export async function extractEntities(text: string, entityTypes: string[] = ["person", "organization", "location"]): Promise<string> {
+  const trimmed = text.slice(0, 10000);
+  if (trimmed.length < 100) return "Not enough content to extract entities.";
+  
+  return completeText({
+    system: `You are an information extraction expert. Extract the following entity types: ${entityTypes.join(", ")}. 
+    Reply with a concise, formatted list of findings. If none found, say 'No entities found'. No preamble.`,
+    user: `Extract entities from this content:\n\n${trimmed}`,
+    maxTokens: 1000,
+  });
+}
+
+export async function classifyContent(text: string, options: string[]): Promise<string | null> {
+  if (options.length === 0) return null;
+  const trimmed = text.slice(0, 5000);
+  
+  const response = await completeText({
+    system: `You are an organizational assistant. Given a text content and a list of categories (folders), choose the BEST matching category. 
+    If no category is a good match (less than 70% relevance), respond ONLY with the word 'null'. 
+    Otherwise, respond ONLY with the exact name of the matching category. No punctuation, no preamble.`,
+    user: `Content: ${trimmed}\n\nCategories: ${options.join(", ")}`,
+    maxTokens: 50,
+  });
+  
+  const match = response.trim();
+  if (match.toLowerCase() === "null") return null;
+  
+  // Find case-insensitive match in options
+  return options.find(opt => opt.toLowerCase() === match.toLowerCase()) || null;
+}

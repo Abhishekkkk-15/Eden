@@ -7,7 +7,7 @@ const router: IRouter = Router();
 
 // Validation schemas - more lenient for UI compatibility
 const WorkflowActionSchema = z.object({
-  type: z.enum(["tag", "move_to_folder", "summarize", "transcribe", "extract_entities", "send_notification", "webhook", "ai_transform"]),
+  type: z.enum(["tag", "generate_tags", "move_to_folder", "ai_organize", "summarize", "transcribe", "extract_entities", "send_notification", "webhook", "ai_transform"]),
   config: z.record(z.unknown()).default({}),
 });
 
@@ -339,8 +339,14 @@ async function executeWorkflow(
           case "tag":
             result = await executeTagAction(action.config, userId);
             break;
+          case "generate_tags":
+            result = await executeGenerateTagsAction(action.config.sourceId as number, action.config);
+            break;
           case "move_to_folder":
             result = await executeMoveAction(action.config, userId);
+            break;
+          case "ai_organize":
+            result = await executeAIOrganizeAction(action.config.sourceId as number, action.config, userId);
             break;
           case "summarize":
             result = await executeSummarizeAction(action.config, userId);
@@ -348,8 +354,11 @@ async function executeWorkflow(
           case "transcribe":
             result = await executeTranscribeAction(action.config, userId);
             break;
+          case "extract_entities":
+            result = await executeExtractEntitiesAction(action.config, userId);
+            break;
           case "send_notification":
-            result = { success: true, message: action.config.message };
+            result = await executeSendNotificationAction(action.config, userId);
             break;
           case "webhook":
             result = await executeWebhookAction(action.config);
@@ -407,6 +416,88 @@ async function executeWorkflow(
 }
 
 // Action executors
+import { generateTags as aiGenerateTags, classifyContent as aiClassifyContent } from "../lib/ai";
+
+async function executeAIOrganizeAction(sourceId: number, config: any, userId: string) {
+  if (!sourceId) throw new Error("Missing sourceId");
+
+  // 1. Get source
+  const [source] = await db
+    .select()
+    .from(sourcesTable)
+    .where(eq(sourcesTable.id, sourceId));
+
+  if (!source) throw new Error("Source not found");
+
+  // 2. Get user folders
+  const folders = await db
+    .select()
+    .from(pagesTable)
+    .where(and(eq(pagesTable.userId, userId), eq(pagesTable.kind, "folder")));
+
+  if (folders.length === 0) {
+    console.log(`[AIOrganize] No folders found for user ${userId}. Skipping organization.`);
+    return { moved: false, reason: "no_folders" };
+  }
+
+  const folderOptions = folders.map(f => f.title);
+  const content = source.summary || source.content || source.title;
+
+  console.log(`[AIOrganize] Classifying source ${sourceId} against folders: [${folderOptions.join(", ")}]`);
+
+  // 3. AI Classify
+  const bestMatchTitle = await aiClassifyContent(content, folderOptions);
+
+  if (bestMatchTitle) {
+    const targetFolder = folders.find(f => f.title === bestMatchTitle);
+    if (targetFolder) {
+      console.log(`[AIOrganize] Moving source ${sourceId} to folder "${bestMatchTitle}" (ID: ${targetFolder.id})`);
+      
+      await db.update(sourcesTable)
+        .set({ parentPageId: targetFolder.id })
+        .where(eq(sourcesTable.id, sourceId));
+
+      return { moved: true, targetFolder: bestMatchTitle, folderId: targetFolder.id };
+    }
+  }
+
+  console.log(`[AIOrganize] No matching folder found for source ${sourceId}`);
+  return { moved: false, reason: "no_match" };
+}
+
+async function executeGenerateTagsAction(sourceId: number, config: any) {
+  if (!sourceId) throw new Error("Missing sourceId");
+
+  const [source] = await db
+    .select()
+    .from(sourcesTable)
+    .where(eq(sourcesTable.id, sourceId));
+
+  if (!source) throw new Error("Source not found");
+
+  const contentToAnalyze = source.summary || source.content || source.title;
+  const tags = await aiGenerateTags(contentToAnalyze);
+
+  if (tags.length === 0) {
+    console.log(`[WorkflowAction:GenerateTags] No tags generated for source ${sourceId}`);
+    return;
+  }
+
+  console.log(`[WorkflowAction:GenerateTags] Generated tags for source ${sourceId}: [${tags.join(", ")}]`);
+
+  for (const tag of tags) {
+    const normalized = tag.trim().toLowerCase();
+    if (!normalized) continue;
+
+    await db.insert(sourceTagsTable)
+      .values({
+        sourceId,
+        tag: normalized,
+      })
+      .onConflictDoNothing();
+  }
+}
+
 async function executeTagAction(config: { tags?: string[]; sourceId?: number; replaceExisting?: boolean }, userId: string) {
   console.log(`[TagAction] Called with config:`, config);
   if (!config.sourceId) {
@@ -494,6 +585,29 @@ async function executeTranscribeAction(config: { language?: string; sourceId?: n
     .returning();
 
   return { jobId: job.id };
+}
+
+async function executeExtractEntitiesAction(config: { entityTypes?: string[]; sourceId?: number }, userId: string) {
+  // Queue an extraction job
+  const [job] = await db
+    .insert(jobQueueTable)
+    .values({
+      userId,
+      jobType: "extract_entities",
+      entityType: "source",
+      entityId: config.sourceId || 0,
+      payload: { entityTypes: config.entityTypes },
+      status: "pending",
+    })
+    .returning();
+
+  return { jobId: job.id };
+}
+
+async function executeSendNotificationAction(config: { message: string; notifyType?: string }, userId: string) {
+  console.log(`[Notification] Sending ${config.notifyType || 'info'} to user ${userId}: ${config.message}`);
+  // In a real app, this would insert into a notifications table or send a push/email
+  return { success: true, sentAt: new Date().toISOString() };
 }
 
 async function executeWebhookAction(config: { url: string; method: string; headers?: Record<string, string>; body?: unknown }) {
