@@ -26,6 +26,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+  Sparkles,
   Heading1,
   Heading2,
   Heading3,
@@ -44,12 +45,16 @@ import {
   Folder,
   FileText,
   Database,
+  Loader2,
+  Check,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SourceCreateDialog } from "@/components/sources/source-create-dialog";
+import { streamChat } from "@/lib/ai";
 
 interface BlockTypeOption {
   type: BlockType;
@@ -59,6 +64,7 @@ interface BlockTypeOption {
 }
 
 const BLOCK_TYPES: BlockTypeOption[] = [
+  { type: "ai", label: "Ask AI", icon: Sparkles, hint: "Generate with AI" },
   { type: "text", label: "Text", icon: TextIcon, hint: "Plain paragraph" },
   { type: "heading1", label: "Heading 1", icon: Heading1, hint: "Section title" },
   { type: "heading2", label: "Heading 2", icon: Heading2, hint: "Subsection" },
@@ -73,6 +79,8 @@ const BLOCK_TYPES: BlockTypeOption[] = [
 
 function placeholderFor(type: BlockType): string {
   switch (type) {
+    case "ai":
+      return "What's on your mind?";
     case "heading1":
       return "Heading 1";
     case "heading2":
@@ -98,6 +106,8 @@ function placeholderFor(type: BlockType): string {
 
 function classesFor(type: BlockType): string {
   switch (type) {
+    case "ai":
+      return "text-base font-medium text-primary";
     case "heading1":
       return "text-3xl font-semibold tracking-tight leading-tight";
     case "heading2":
@@ -152,13 +162,15 @@ function BlockRow({
 }: BlockRowProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [slashOpen, setSlashOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [prompt, setPrompt] = useState("");
 
   useEffect(() => {
-    if (!editorRef.current) return;
+    if (!editorRef.current || isGenerating) return;
     if (editorRef.current.innerText !== block.content) {
       editorRef.current.innerText = block.content;
     }
-  }, [block.id, block.content]);
+  }, [block.id, block.content, isGenerating]);
 
   const handleInput = () => {
     const value = editorRef.current?.innerText ?? "";
@@ -168,6 +180,37 @@ function BlockRow({
       setSlashOpen(false);
     }
     onChangeContent(value);
+  };
+
+  const handleAIKeyPress = async (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && prompt.trim()) {
+      setIsGenerating(true);
+      let fullContent = "";
+      try {
+        const stream = streamChat([
+          { role: "system", content: "You are a helpful writing assistant. Provide concise, well-formatted text without any introductory or concluding remarks." },
+          { role: "user", content: prompt },
+        ]);
+
+        for await (const chunk of stream) {
+          fullContent += chunk;
+          if (editorRef.current) {
+            editorRef.current.innerText = fullContent;
+          }
+        }
+        
+        onChangeType("text");
+        onChangeContent(fullContent);
+      } catch (err) {
+        toast.error("AI generation failed");
+      } finally {
+        setIsGenerating(false);
+        setPrompt("");
+      }
+    } else if (e.key === "Escape") {
+      onChangeType("text");
+      setPrompt("");
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -244,44 +287,66 @@ function BlockRow({
         </span>
       )}
 
-      <Popover open={slashOpen} onOpenChange={setSlashOpen}>
-        <PopoverTrigger asChild>
-          <div
-            ref={editorRef}
-            contentEditable
-            suppressContentEditableWarning
-            data-placeholder={placeholderFor(block.type)}
-            onInput={handleInput}
-            onKeyDown={handleKeyDown}
-            onFocus={onFocus}
-            className={`flex-1 min-h-[1.75rem] outline-none rounded-sm transition-colors ${classesFor(
-              block.type,
-            )} ${block.type === "todo" && block.checked ? "line-through text-muted-foreground" : ""} empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/50 ${
-              isFocused ? "" : ""
-            }`}
+      {block.type === "ai" ? (
+        <div className="flex-1 relative flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20 shadow-[0_0_15px_rgba(var(--primary),0.05)]">
+          <Sparkles className="w-4 h-4 text-primary shrink-0" />
+          <input
+            autoFocus
+            className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-primary/40 text-foreground"
+            placeholder={isGenerating ? "AI is thinking..." : "Ask AI to write anything..."}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={handleAIKeyPress}
+            disabled={isGenerating}
           />
-        </PopoverTrigger>
-        <PopoverContent align="start" sideOffset={4} className="w-72 p-1">
-          <div className="text-xs text-muted-foreground px-2 py-1.5">Insert block</div>
-          <div className="max-h-72 overflow-y-auto">
-            {BLOCK_TYPES.map((opt) => {
-              const Icon = opt.icon;
-              return (
-                <button
-                  key={opt.type}
-                  type="button"
-                  onClick={() => pickType(opt.type)}
-                  className="w-full flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent text-left"
-                >
-                  <Icon className="h-4 w-4 text-muted-foreground" />
-                  <span className="flex-1">{opt.label}</span>
-                  <span className="text-xs text-muted-foreground">{opt.hint}</span>
-                </button>
-              );
-            })}
-          </div>
-        </PopoverContent>
-      </Popover>
+          {isGenerating ? (
+            <Loader2 className="w-4 h-4 animate-spin text-primary" />
+          ) : (
+            <button onClick={() => onChangeType("text")} className="text-muted-foreground hover:text-foreground">
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      ) : (
+        <Popover open={slashOpen} onOpenChange={setSlashOpen}>
+          <PopoverTrigger asChild>
+            <div
+              ref={editorRef}
+              contentEditable
+              suppressContentEditableWarning
+              data-placeholder={placeholderFor(block.type)}
+              onInput={handleInput}
+              onKeyDown={handleKeyDown}
+              onFocus={onFocus}
+              className={`flex-1 min-h-[1.75rem] outline-none rounded-sm transition-colors ${classesFor(
+                block.type,
+              )} ${block.type === "todo" && block.checked ? "line-through text-muted-foreground" : ""} empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/50 ${
+                isFocused ? "" : ""
+              }`}
+            />
+          </PopoverTrigger>
+          <PopoverContent align="start" sideOffset={4} className="w-72 p-1">
+            <div className="text-xs text-muted-foreground px-2 py-1.5">Insert block</div>
+            <div className="max-h-72 overflow-y-auto">
+              {BLOCK_TYPES.map((opt) => {
+                const Icon = opt.icon;
+                return (
+                  <button
+                    key={opt.type}
+                    type="button"
+                    onClick={() => pickType(opt.type)}
+                    className="w-full flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent text-left"
+                  >
+                    <Icon className={cn("h-4 w-4", opt.type === 'ai' ? "text-primary" : "text-muted-foreground")} />
+                    <span className="flex-1">{opt.label}</span>
+                    <span className="text-xs text-muted-foreground">{opt.hint}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </PopoverContent>
+        </Popover>
+      )}
     </div>
   );
 }

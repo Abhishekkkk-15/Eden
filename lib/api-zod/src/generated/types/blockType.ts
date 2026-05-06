@@ -20,4 +20,5 @@ export const BlockType = {
   quote: 'quote',
   code: 'code',
   divider: 'divider',
+  ai: 'ai',
 } as const;

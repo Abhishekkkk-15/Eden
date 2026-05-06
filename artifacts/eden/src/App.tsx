@@ -21,6 +21,7 @@ import WorkflowsList from "@/pages/workflows/index";
 import IntegrationsSettings from "@/pages/settings/integrations";
 import LoginPage from "@/pages/login";
 import SignupPage from "@/pages/signup";
+import LandingPage from "@/pages/landing";
 
 const queryClient = new QueryClient();
 
@@ -34,10 +35,11 @@ function Router() {
   useEffect(() => {
     const token = localStorage.getItem("token");
     const isAuthPage = location === "/login" || location === "/signup";
+    const isLandingPage = location === "/";
     
-    if (!token && !isAuthPage) {
-      setLocation("/login");
-    } else if (token && isAuthPage) {
+    if (token && (isAuthPage || isLandingPage)) {
+      setLocation("/dashboard");
+    } else if (!token && !isAuthPage && !isLandingPage) {
       setLocation("/");
     }
     setIsAuthChecking(false);
@@ -47,12 +49,13 @@ function Router() {
 
   return (
     <Switch>
+      <Route path="/" component={LandingPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/signup" component={SignupPage} />
       <Route>
         <AppLayout>
           <Switch>
-            <Route path="/" component={Home} />
+            <Route path="/dashboard" component={Home} />
             <Route path="/pages/:id" component={PageEditor} />
             <Route path="/sources" component={SourcesList} />
             <Route path="/sources/:id" component={SourceDetail} />
