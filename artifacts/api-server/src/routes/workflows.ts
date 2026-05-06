@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, workflowsTable, workflowRunsTable, jobQueueTable, sourcesTable, sourceTagsTable } from "@workspace/db";
+import { db, workflowsTable, workflowRunsTable, jobQueueTable, sourcesTable, sourceTagsTable, pagesTable } from "@workspace/db";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { z } from "zod";
 

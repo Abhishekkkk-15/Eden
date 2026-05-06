@@ -54,6 +54,11 @@ export function SourceCreateDialog({
     defaultParentPageId == null ? "__root__" : String(defaultParentPageId),
   );
 
+  // Sync state when prop changes (e.g. after navigation)
+  useMemo(() => {
+    setParentPageId(defaultParentPageId == null ? "__root__" : String(defaultParentPageId));
+  }, [defaultParentPageId]);
+
   const queryClient = useQueryClient();
   const createSource = useCreateSource();
   const { data: pages } = useListPages();

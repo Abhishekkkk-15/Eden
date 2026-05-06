@@ -117,25 +117,7 @@ export default function SourceDetail({ params }: { params: { id: string } }) {
         </Card>
       )}
 
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium">Indexed Content ({chunkList.length})</h3>
-        <div className="grid gap-4">
-          {chunkList.map((chunk) => (
-            <Card key={chunk.id} className="bg-card">
-              <CardContent className="p-4 text-sm leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
-                {chunk.content}
-              </CardContent>
-            </Card>
-          ))}
-          {chunkList.length === 0 && (
-            <Card className="bg-card">
-              <CardContent className="p-4 text-sm text-muted-foreground">
-                No indexed text was extracted from this source yet.
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
+      {/* Indexed Content removed per user request */}
     </div>
   );
 }

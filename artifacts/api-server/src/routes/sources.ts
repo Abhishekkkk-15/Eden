@@ -133,6 +133,7 @@ router.get("/sources", async (req, res) => {
         status: String(r.status),
         createdAt: new Date(r.created_at as string).toISOString(),
         isPage: Boolean(r.is_page),
+        tags: r.tags as string[],
       }),
     ),
   );
@@ -340,7 +341,25 @@ router.post("/sources", async (req, res) => {
 
 router.get("/sources/:id", async (req, res) => {
   const { id } = GetSourceParams.parse(req.params);
-  const [source] = await db.select().from(sourcesTable).where(eq(sourcesTable.id, id));
+  
+  const [source] = await db
+    .select({
+      id: sourcesTable.id,
+      kind: sourcesTable.kind,
+      title: sourcesTable.title,
+      url: sourcesTable.url,
+      parentPageId: sourcesTable.parentPageId,
+      mediaPath: sourcesTable.mediaPath,
+      mediaMimeType: sourcesTable.mediaMimeType,
+      mediaSizeBytes: sourcesTable.mediaSizeBytes,
+      summary: sourcesTable.summary,
+      status: sourcesTable.status,
+      createdAt: sourcesTable.createdAt,
+      content: sourcesTable.content,
+      tags: sql`COALESCE((SELECT json_agg(st.tag) FROM source_tags st WHERE st.source_id = ${sourcesTable.id}), '[]'::json)`,
+    })
+    .from(sourcesTable)
+    .where(eq(sourcesTable.id, id));
   if (!source) {
     res.status(404).json({ error: "Source not found" });
     return;
@@ -366,6 +385,7 @@ router.get("/sources/:id", async (req, res) => {
     createdAt: source.createdAt.toISOString(),
     content: source.content,
     chunks,
+    tags: source.tags as string[],
   });
 });
 
@@ -439,6 +459,7 @@ router.patch("/sources/:id", async (req, res) => {
           chunkCount,
           status: source.status,
           createdAt: source.createdAt.toISOString(),
+          tags: (await db.select({ tag: sourceTagsTable.tag }).from(sourceTagsTable).where(eq(sourceTagsTable.sourceId, id))).map(t => t.tag),
         }),
       );
       return;
@@ -474,6 +495,7 @@ router.patch("/sources/:id", async (req, res) => {
         chunkCount,
         status: updated.status,
         createdAt: updated.createdAt.toISOString(),
+        tags: (await db.select({ tag: sourceTagsTable.tag }).from(sourceTagsTable).where(eq(sourceTagsTable.sourceId, id))).map(t => t.tag),
       }),
     );
     return;
