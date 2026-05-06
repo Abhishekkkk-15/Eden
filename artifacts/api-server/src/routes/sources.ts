@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { db, sourcesTable, sourceChunksTable, pagesTable, blocksTable, transcriptionsTable } from "@workspace/db";
+import { db, sourcesTable, sourceChunksTable, pagesTable, blocksTable, transcriptionsTable, sourceTagsTable } from "@workspace/db";
 import { and, asc, eq, sql } from "drizzle-orm";
+import { z } from "zod";
 import {
   CreateSourceBody,
   GetSourceParams,
@@ -9,7 +10,8 @@ import {
   DeleteSourceParams,
 } from "@workspace/api-zod";
 import { chunkText } from "../lib/rag";
-import { summarize } from "../lib/ai";
+import { summarize, generateEmbedding } from "../lib/ai";
+import { pgvectorEnabled } from "../lib/embed-init";
 import {
   extractImageContent,
   extractVideoContent,
@@ -323,6 +325,25 @@ router.post("/sources", async (req, res) => {
           );
         }
       });
+
+      // Generate and store embeddings (non-blocking, best-effort)
+      if (pgvectorEnabled && chunks.length > 0) {
+        void (async () => {
+          try {
+            for (let i = 0; i < chunks.length; i++) {
+              const embedding = await generateEmbedding(chunks[i]!);
+              const vectorStr = `[${embedding.join(",")}]`;
+              await db.execute(sql`
+                UPDATE source_chunks
+                SET embedding = ${vectorStr}::vector
+                WHERE source_id = ${pending.id} AND position = ${i}
+              `);
+            }
+          } catch (embedErr) {
+            req.log.warn({ err: embedErr, sourceId: pending.id }, "embedding generation failed (non-critical)");
+          }
+        })();
+      }
 
       // Trigger workflows for this source
       void triggerWorkflows("source_created", pending.id, user.id, {

@@ -16,6 +16,7 @@ import {
   FileSpreadsheet,
   Eye,
   Cloud,
+  Bot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +43,8 @@ interface PhotoFolderProps {
   onRename?: () => void;
   onDelete?: () => void;
   onExport?: () => void;
+  onAssignAgent?: () => void;
+  agentBadge?: string | null;
   isDragging?: boolean;
   isDropTarget?: boolean;
   draggable?: boolean;
@@ -105,6 +108,8 @@ export function PhotoFolder({
   onRename,
   onDelete,
   onExport,
+  onAssignAgent,
+  agentBadge,
   isDragging,
   isDropTarget,
   draggable,
@@ -337,6 +342,10 @@ export function PhotoFolder({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAssignAgent?.(); }}>
+                      <Bot className="h-4 w-4 mr-2 text-primary" />
+                      Assign Agent
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRename?.(); }}>
                       <Pencil className="h-4 w-4 mr-2" />
                       Rename
@@ -394,6 +403,12 @@ export function PhotoFolder({
                 <div className="font-medium text-foreground truncate pr-2">
                   {title}
                 </div>
+                {agentBadge && (
+                  <div className="flex items-center gap-1 mt-0.5 text-[9px] text-primary/80 truncate">
+                    <Bot className="h-2.5 w-2.5 shrink-0" />
+                    <span className="truncate">{agentBadge}</span>
+                  </div>
+                )}
               </motion.div>
             </div>
 

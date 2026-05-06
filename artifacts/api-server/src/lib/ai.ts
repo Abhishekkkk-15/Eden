@@ -113,6 +113,15 @@ export async function extractEntities(text: string, entityTypes: string[] = ["pe
   });
 }
 
+export async function generateEmbedding(text: string): Promise<number[]> {
+  const res = await nvidiaClient.embeddings.create({
+    model: "nvidia/nv-embedqa-e5-v5",
+    input: text.slice(0, 8192),
+    encoding_format: "float",
+  } as any);
+  return ((res.data[0] as any).embedding) as number[];
+}
+
 export async function classifyContent(text: string, options: string[]): Promise<string | null> {
   if (options.length === 0) return null;
   const trimmed = text.slice(0, 5000);

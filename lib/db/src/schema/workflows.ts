@@ -117,7 +117,8 @@ export type WorkflowAction =
   | { type: "extract_entities"; config: { entityTypes?: string[] } }
   | { type: "send_notification"; config: { message: string; notifyType: "toast" | "email" } }
   | { type: "webhook"; config: { url: string; method: "GET" | "POST"; headers?: Record<string, string> } }
-  | { type: "ai_transform"; config: { prompt: string; outputField: "title" | "description" | "tags" } };
+  | { type: "ai_transform"; config: { prompt: string; outputField: "title" | "description" | "tags" } }
+  | { type: "ai_agent_process"; config: { agentId: number } };
 
 // Trigger config types
 export type WorkflowTrigger =

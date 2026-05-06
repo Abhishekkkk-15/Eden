@@ -1,6 +1,8 @@
 import { db, pagesTable, blocksTable, sourcesTable, sourceChunksTable } from "@workspace/db";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Citation } from "@workspace/db";
+import { generateEmbedding } from "./ai";
+import { pgvectorEnabled } from "./embed-init";
 
 export type RagHit = {
   kind: "page" | "block" | "source" | "chunk";
@@ -176,15 +178,100 @@ async function searchWorkspaceWithMode(
   return hits.slice(0, limit);
 }
 
-/** Full-text search across pages, blocks, uploaded files, and chunks. Tries plain search if web syntax yields nothing (better for chat questions). */
+/** Semantic vector search over source chunks using pgvector cosine distance. */
+async function semanticSearchChunks(
+  userId: string,
+  embedding: number[],
+  limit: number,
+): Promise<Array<{ id: number; sourceId: number; sourceTitle: string; content: string; similarity: number }>> {
+  if (!pgvectorEnabled) return [];
+  const vectorStr = `[${embedding.join(",")}]`;
+  const rows = await db.execute(sql`
+    SELECT c.id, c.source_id, c.content,
+           s.title AS source_title,
+           1 - (c.embedding <=> ${vectorStr}::vector) AS similarity
+    FROM source_chunks c
+    JOIN sources s ON s.id = c.source_id
+    WHERE s.user_id = ${userId}
+      AND c.embedding IS NOT NULL
+    ORDER BY c.embedding <=> ${vectorStr}::vector
+    LIMIT ${limit}
+  `);
+  return (rows.rows as Array<Record<string, unknown>>).map((r) => ({
+    id: Number(r.id),
+    sourceId: Number(r.source_id),
+    sourceTitle: String(r.source_title),
+    content: String(r.content),
+    similarity: Number(r.similarity) || 0,
+  }));
+}
+
+/** Hybrid search: FTS + semantic via Reciprocal Rank Fusion (RRF). Falls back gracefully to FTS-only. */
 export async function searchWorkspace(userId: string, query: string, limit = 12): Promise<RagHit[]> {
   const q = query.trim();
   if (!q) return [];
-  let hits = await searchWorkspaceWithMode(userId, q, limit, "websearch");
-  if (hits.length === 0) {
-    hits = await searchWorkspaceWithMode(userId, q, limit, "plain");
+
+  let ftsHits = await searchWorkspaceWithMode(userId, q, limit * 2, "websearch");
+  if (ftsHits.length === 0) {
+    ftsHits = await searchWorkspaceWithMode(userId, q, limit * 2, "plain");
   }
-  return hits;
+
+  // Try semantic search (gracefully skip if unavailable or no API key)
+  let semanticChunks: Awaited<ReturnType<typeof semanticSearchChunks>> = [];
+  try {
+    if (pgvectorEnabled) {
+      const embedding = await generateEmbedding(q);
+      semanticChunks = await semanticSearchChunks(userId, embedding, limit * 2);
+    }
+  } catch {
+    // Semantic unavailable — continue with FTS only
+  }
+
+  if (semanticChunks.length === 0) {
+    return ftsHits.slice(0, limit);
+  }
+
+  // Reciprocal Rank Fusion (k=60)
+  const k = 60;
+  const scoreMap = new Map<string, { hit: RagHit; rrf: number }>();
+
+  ftsHits.forEach((hit, rank) => {
+    const key = `${hit.kind}:${hit.refId}`;
+    const rrfScore = 1 / (k + rank + 1);
+    const existing = scoreMap.get(key);
+    if (existing) {
+      existing.rrf += rrfScore;
+    } else {
+      scoreMap.set(key, { hit, rrf: rrfScore });
+    }
+  });
+
+  semanticChunks.forEach((chunk, rank) => {
+    const key = `chunk:${chunk.id}`;
+    const rrfScore = 1 / (k + rank + 1);
+    const existing = scoreMap.get(key);
+    if (existing) {
+      existing.rrf += rrfScore;
+    } else {
+      scoreMap.set(key, {
+        hit: {
+          kind: "chunk",
+          refId: chunk.id,
+          pageId: null,
+          sourceId: chunk.sourceId,
+          title: chunk.sourceTitle,
+          snippet: chunk.content.slice(0, 240),
+          score: chunk.similarity,
+        },
+        rrf: rrfScore,
+      });
+    }
+  });
+
+  return Array.from(scoreMap.values())
+    .sort((a, b) => b.rrf - a.rrf)
+    .map(({ hit, rrf }) => ({ ...hit, score: rrf }))
+    .slice(0, limit);
 }
 
 export async function buildRagContext(userId: string, query: string): Promise<{

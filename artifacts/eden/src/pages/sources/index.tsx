@@ -11,10 +11,12 @@ import {
   useDeleteSource,
   useSearchWorkspace,
   getSearchWorkspaceQueryKey,
+  useListAgents,
   type Page,
   type Source,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { API_BASE_URL } from "@/config";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import {
@@ -34,6 +36,7 @@ import {
   FolderOpen,
   CheckSquare,
   Cloud,
+  Bot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,6 +60,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SourceCreateDialog } from "@/components/sources/source-create-dialog";
 import { WorkspaceSearchPanel } from "@/components/sources/workspace-search-panel";
+import { AssignAgentDialog } from "@/components/sources/assign-agent-dialog";
 import { PhotoFolder, type FolderItem } from "@/components/PhotoFolder";
 import { BulkOperationsToolbar } from "@/components/sources/bulk-operations-toolbar";
 import { ProcessingStatus, useProcessingJobs } from "@/components/processing-status";
@@ -105,6 +109,8 @@ function FolderCard({
   onDragEnd,
   previewItems,
   folderSources,
+  assignedAgent,
+  onAgentChange,
 }: {
   folder: Page;
   onOpen: () => void;
@@ -117,10 +123,13 @@ function FolderCard({
   onDragEnd: () => void;
   previewItems: FolderPreviewItem[];
   folderSources: SourceWithPage[];
+  assignedAgent?: { id: number; name: string; emoji: string; workflowId: number } | null;
+  onAgentChange?: () => void;
 }) {
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isAssignAgentOpen, setIsAssignAgentOpen] = useState(false);
   const [renameTitle, setRenameTitle] = useState(folder.title);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -216,6 +225,8 @@ function FolderCard({
         onRename={() => setIsRenameOpen(true)}
         onDelete={() => setIsDeleteOpen(true)}
         onExport={() => setIsExportOpen(true)}
+        onAssignAgent={() => setIsAssignAgentOpen(true)}
+        agentBadge={assignedAgent ? `${assignedAgent.emoji || "✨"} ${assignedAgent.name}` : null}
         isDragging={isDragging}
         isDropTarget={isDropTarget || isDragOver}
         draggable
@@ -232,6 +243,17 @@ function FolderCard({
         sourceId={folder.id}
         isPage={true}
         fileName={folder.title}
+      />
+
+      <AssignAgentDialog
+        open={isAssignAgentOpen}
+        onOpenChange={setIsAssignAgentOpen}
+        folderId={folder.id}
+        folderTitle={folder.title}
+        onAssigned={() => {
+          setIsAssignAgentOpen(false);
+          onAgentChange?.();
+        }}
       />
 
       <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
@@ -693,11 +715,52 @@ function sourcesPathForFolder(targetFolderId: number | null, clearSearch = true)
 export default function SourcesList() {
   const { data: sources, isLoading: sourcesLoading } = useListSources();
   const { data: pages, isLoading: pagesLoading } = useListPages();
+  const { data: agents } = useListAgents();
   const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
   // Processing jobs (for background status)
   const { jobs, cancelJob, retryJob } = useProcessingJobs(5000);
+
+  // Fetch workflows to build folder-agent map
+  const { data: allWorkflows, refetch: refetchFolderAgents } = useQuery({
+    queryKey: ["folder-agent-workflows"],
+    queryFn: async () => {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/workflows`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return [];
+      return res.json() as Promise<Array<{
+        id: number;
+        triggerConfig: Record<string, unknown>;
+        actions: Array<{ type: string; config: Record<string, unknown> }>;
+        isActive: boolean;
+      }>>;
+    },
+  });
+
+  const folderAgentMap = useMemo(() => {
+    const map = new Map<number, { id: number; name: string; emoji: string; workflowId: number }>();
+    if (!allWorkflows || !agents) return map;
+    for (const w of allWorkflows) {
+      if (!w.isActive) continue;
+      const tc = w.triggerConfig;
+      const agentAction = w.actions?.find((a) => a.type === "ai_agent_process");
+      if (tc?.folderId && agentAction?.config?.agentId) {
+        const agent = agents.find((a) => a.id === agentAction.config?.agentId);
+        if (agent) {
+          map.set(Number(tc.folderId), {
+            id: agent.id,
+            name: agent.name,
+            emoji: agent.emoji || "",
+            workflowId: w.id,
+          });
+        }
+      }
+    }
+    return map;
+  }, [allWorkflows, agents]);
 
   // Mutations
   const updatePage = useUpdatePage();
@@ -1295,6 +1358,8 @@ export default function SourcesList() {
                       }}
                       previewItems={folderPreviewMap.get(folder.id) ?? []}
                       folderSources={folderSourcesMap.get(folder.id) ?? []}
+                      assignedAgent={folderAgentMap.get(folder.id) ?? null}
+                      onAgentChange={() => refetchFolderAgents()}
                     />
                   ))}
                 </div>

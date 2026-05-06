@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, workflowsTable, workflowRunsTable, jobQueueTable, sourcesTable, sourceTagsTable, pagesTable } from "@workspace/db";
+import { db, workflowsTable, workflowRunsTable, jobQueueTable, sourcesTable, sourceTagsTable, pagesTable, agentsTable } from "@workspace/db";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { z } from "zod";
 
@@ -7,7 +7,7 @@ const router: IRouter = Router();
 
 // Validation schemas - more lenient for UI compatibility
 const WorkflowActionSchema = z.object({
-  type: z.enum(["tag", "generate_tags", "move_to_folder", "ai_organize", "summarize", "transcribe", "extract_entities", "send_notification", "webhook", "ai_transform"]),
+  type: z.enum(["tag", "generate_tags", "move_to_folder", "ai_organize", "summarize", "transcribe", "extract_entities", "send_notification", "webhook", "ai_transform", "ai_agent_process"]),
   config: z.record(z.unknown()).default({}),
 });
 
@@ -366,6 +366,9 @@ async function executeWorkflow(
           case "ai_transform":
             result = await executeAITransformAction(action.config, userId);
             break;
+          case "ai_agent_process":
+            result = await executeAIAgentProcessAction(action.config, userId);
+            break;
           default:
             throw new Error(`Unknown action type: ${action.type}`);
         }
@@ -416,7 +419,7 @@ async function executeWorkflow(
 }
 
 // Action executors
-import { generateTags as aiGenerateTags, classifyContent as aiClassifyContent } from "../lib/ai";
+import { generateTags as aiGenerateTags, classifyContent as aiClassifyContent, completeText } from "../lib/ai";
 
 async function executeAIOrganizeAction(sourceId: number, config: any, userId: string) {
   if (!sourceId) throw new Error("Missing sourceId");
@@ -643,6 +646,154 @@ async function executeAITransformAction(config: { prompt: string; outputField: s
 
   return { jobId: job.id };
 }
+
+async function executeAIAgentProcessAction(config: { agentId?: number; sourceId?: number }, userId: string) {
+  if (!config.sourceId) throw new Error("Missing sourceId");
+  if (!config.agentId) throw new Error("Missing agentId");
+
+  const [source] = await db.select().from(sourcesTable).where(eq(sourcesTable.id, config.sourceId));
+  if (!source) throw new Error("Source not found");
+
+  const [agent] = await db.select().from(agentsTable).where(eq(agentsTable.id, config.agentId));
+  if (!agent) throw new Error("Agent not found");
+
+  const content = (source.content || source.summary || source.title).slice(0, 12000);
+
+  const result = await completeText({
+    system: agent.prompt,
+    user: `Process the following content:\n\n${content}`,
+    maxTokens: 1000,
+  });
+
+  await db
+    .update(sourcesTable)
+    .set({ summary: result })
+    .where(eq(sourcesTable.id, config.sourceId));
+
+  console.log(`[AIAgentProcess] Agent "${agent.name}" processed source ${config.sourceId}`);
+  return { output: result, agentName: agent.name };
+}
+
+// Folder-agent management endpoints
+
+// GET /workflows/folder-agent/:folderId — get assigned agent for a folder
+router.get("/workflows/folder-agent/:folderId", async (req, res) => {
+  const user = (req as any).user;
+  const folderId = parseInt(req.params.folderId);
+  if (isNaN(folderId)) return res.status(400).json({ error: "Invalid folderId" });
+
+  try {
+    const workflows = await db
+      .select()
+      .from(workflowsTable)
+      .where(and(eq(workflowsTable.userId, user.id), eq(workflowsTable.isActive, true)));
+
+    const folderAgentWorkflow = workflows.find((w) => {
+      const tc = w.triggerConfig as Record<string, unknown>;
+      const actions = w.actions as Array<{ type: string; config: Record<string, unknown> }>;
+      return Number(tc?.folderId) === folderId && actions.some((a) => a.type === "ai_agent_process");
+    });
+
+    if (!folderAgentWorkflow) return res.json(null);
+
+    const actions = folderAgentWorkflow.actions as Array<{ type: string; config: Record<string, unknown> }>;
+    const agentAction = actions.find((a) => a.type === "ai_agent_process");
+    const agentId = agentAction?.config?.agentId;
+    if (!agentId) return res.json(null);
+
+    const [agent] = await db.select().from(agentsTable).where(eq(agentsTable.id, Number(agentId)));
+    res.json({
+      workflowId: folderAgentWorkflow.id,
+      agent: agent ? { id: agent.id, name: agent.name, emoji: agent.emoji } : null,
+    });
+  } catch (error) {
+    console.error("Failed to get folder agent:", error);
+    res.status(500).json({ error: "Failed to get folder agent" });
+  }
+});
+
+// POST /workflows/folder-agent/:folderId — assign an agent to a folder
+router.post("/workflows/folder-agent/:folderId", async (req, res) => {
+  const user = (req as any).user;
+  const folderId = parseInt(req.params.folderId);
+  if (isNaN(folderId)) return res.status(400).json({ error: "Invalid folderId" });
+
+  try {
+    const { agentId } = z.object({ agentId: z.number() }).parse(req.body);
+
+    const [agent] = await db
+      .select()
+      .from(agentsTable)
+      .where(and(eq(agentsTable.id, agentId), eq(agentsTable.userId, user.id)));
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+
+    const [folder] = await db
+      .select()
+      .from(pagesTable)
+      .where(and(eq(pagesTable.id, folderId), eq(pagesTable.userId, user.id)));
+    if (!folder) return res.status(404).json({ error: "Folder not found" });
+
+    const workflows = await db.select().from(workflowsTable).where(eq(workflowsTable.userId, user.id));
+    const existing = workflows.find((w) => {
+      const tc = w.triggerConfig as Record<string, unknown>;
+      const actions = w.actions as Array<{ type: string; config: Record<string, unknown> }>;
+      return Number(tc?.folderId) === folderId && actions.some((a) => a.type === "ai_agent_process");
+    });
+
+    const workflowData = {
+      name: `Agent: ${agent.name} → ${folder.title}`,
+      description: `Auto-process files in "${folder.title}" with agent "${agent.name}"`,
+      emoji: agent.emoji || "🤖",
+      triggerType: "source_created" as const,
+      triggerConfig: { folderId },
+      actions: [{ type: "ai_agent_process", config: { agentId } }],
+      isActive: true,
+    };
+
+    if (existing) {
+      const [updated] = await db
+        .update(workflowsTable)
+        .set({ ...workflowData, updatedAt: new Date() })
+        .where(eq(workflowsTable.id, existing.id))
+        .returning();
+      return res.json({ workflowId: updated.id, agent: { id: agent.id, name: agent.name, emoji: agent.emoji } });
+    }
+
+    const [created] = await db
+      .insert(workflowsTable)
+      .values({ userId: user.id, ...workflowData, runCount: 0 })
+      .returning();
+    return res.status(201).json({ workflowId: created.id, agent: { id: agent.id, name: agent.name, emoji: agent.emoji } });
+  } catch (error) {
+    if (error instanceof z.ZodError) return res.status(400).json({ error: "Invalid request body", details: error.errors });
+    console.error("Failed to assign folder agent:", error);
+    res.status(500).json({ error: "Failed to assign folder agent" });
+  }
+});
+
+// DELETE /workflows/folder-agent/:folderId — remove folder agent assignment
+router.delete("/workflows/folder-agent/:folderId", async (req, res) => {
+  const user = (req as any).user;
+  const folderId = parseInt(req.params.folderId);
+  if (isNaN(folderId)) return res.status(400).json({ error: "Invalid folderId" });
+
+  try {
+    const workflows = await db.select().from(workflowsTable).where(eq(workflowsTable.userId, user.id));
+    const existing = workflows.find((w) => {
+      const tc = w.triggerConfig as Record<string, unknown>;
+      const actions = w.actions as Array<{ type: string; config: Record<string, unknown> }>;
+      return Number(tc?.folderId) === folderId && actions.some((a) => a.type === "ai_agent_process");
+    });
+
+    if (!existing) return res.status(404).json({ error: "No agent assigned to this folder" });
+
+    await db.delete(workflowsTable).where(eq(workflowsTable.id, existing.id));
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Failed to remove folder agent:", error);
+    res.status(500).json({ error: "Failed to remove folder agent" });
+  }
+});
 
 // Function to trigger workflows based on events
 export async function triggerWorkflows(

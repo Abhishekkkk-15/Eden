@@ -3,6 +3,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startJobQueueProcessor } from "./lib/job-queue";
 import { startCloudImportProcessor } from "./lib/cloud-import-processor";
+import { initEmbeddingExtension } from "./lib/embed-init";
 
 const rawPort = process.env["PORT"];
 
@@ -17,6 +18,9 @@ const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
+
+// Initialize pgvector for semantic search (non-blocking)
+void initEmbeddingExtension();
 
 // Start job queue processor
 const stopJobProcessor = startJobQueueProcessor();
