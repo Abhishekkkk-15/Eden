@@ -36,13 +36,15 @@ interface CloudImportDialogProps {
 const providerIcons = {
   google_drive: <FolderOpen className="h-5 w-5 text-blue-500" />,
   dropbox: <Cloud className="h-5 w-5 text-blue-600" />,
-  one_drive: <RefreshCw className="h-5 w-5 text-blue-700" />, // Fixed from HardDrive to RefreshCw for icon variety if needed, or stick to what was there
+  one_drive: <RefreshCw className="h-5 w-5 text-blue-700" />,
+  notion: <FileText className="h-5 w-5 text-black" />,
 };
 
 const providerLabels = {
   google_drive: "Google Drive",
   dropbox: "Dropbox",
   one_drive: "OneDrive",
+  notion: "Notion",
 };
 
 const statusConfig: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ReactNode; label: string }> = {

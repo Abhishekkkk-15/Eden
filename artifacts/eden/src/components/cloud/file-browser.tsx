@@ -71,7 +71,7 @@ import { cn } from "@/lib/utils";
 
 interface FileBrowserProps {
   integrationId: number;
-  provider: "google_drive" | "dropbox" | "one_drive";
+  provider: "google_drive" | "dropbox" | "one_drive" | "notion";
   targetPageId?: number;
   onImport?: () => void;
   enableCrud?: boolean;
@@ -84,6 +84,8 @@ const fileIcons: Record<string, React.ReactNode> = {
   "audio/": <FileAudio className="w-5 h-5 text-green-500" />,
   "text/": <FileText className="w-5 h-5 text-gray-500" />,
   "application/pdf": <FileText className="w-5 h-5 text-red-600" />,
+  notion_page: <FileText className="w-5 h-5 text-black" />,
+  notion_database: <FileOutput className="w-5 h-5 text-indigo-500" />,
   default: <File className="w-5 h-5 text-gray-400" />,
 };
 
@@ -94,6 +96,8 @@ function getFileIcon(file: CloudFile): React.ReactNode {
   if (file.mimeType?.startsWith("audio/")) return fileIcons["audio/"];
   if (file.mimeType?.startsWith("text/")) return fileIcons["text/"];
   if (file.mimeType === "application/pdf") return fileIcons["application/pdf"];
+  if (file.mimeType === "application/vnd.notion-page") return fileIcons.notion_page;
+  if (file.mimeType === "application/vnd.notion-database") return fileIcons.notion_database;
   return fileIcons.default;
 }
 

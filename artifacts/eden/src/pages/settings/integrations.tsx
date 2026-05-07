@@ -6,6 +6,8 @@ import {
   useConnectDropbox,
   useDeleteCloudIntegration,
   useSyncCloudIntegration,
+  useConnectNotion,
+  useSetupNotionDatabase,
 } from "@/hooks/use-cloud-integrations";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +25,8 @@ import {
   Plug,
   Unplug,
   Calendar,
+  FileText,
+  Sparkles,
 } from "lucide-react";
 
 const providerMeta = {
@@ -53,6 +57,15 @@ const providerMeta = {
     borderColor: "border-blue-700/30",
     activeBg: "from-blue-700/5 to-transparent",
   },
+  notion: {
+    label: "Notion",
+    description: "Import pages and databases from your Notion workspace.",
+    icon: FileText,
+    color: "text-black",
+    bgColor: "bg-black/5",
+    borderColor: "border-black/10",
+    activeBg: "from-black/5 to-transparent",
+  },
 } as const;
 
 type Provider = keyof typeof providerMeta;
@@ -67,8 +80,10 @@ export default function IntegrationsSettings() {
   const { data: integrations, isLoading } = useCloudIntegrations();
   const connectGoogle = useConnectGoogleDrive();
   const connectDropbox = useConnectDropbox();
+  const connectNotion = useConnectNotion();
   const deleteIntegration = useDeleteCloudIntegration();
   const syncIntegration = useSyncCloudIntegration();
+  const setupNotion = useSetupNotionDatabase();
 
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
 
@@ -84,13 +99,15 @@ export default function IntegrationsSettings() {
     }
   }, [status, error, provider]);
 
-  const handleConnect = async (p: "google_drive" | "dropbox") => {
+  const handleConnect = async (p: "google_drive" | "dropbox" | "notion") => {
     setIsConnecting(p);
     try {
       if (p === "google_drive") {
         await connectGoogle.mutateAsync();
-      } else {
+      } else if (p === "dropbox") {
         await connectDropbox.mutateAsync();
+      } else {
+        await connectNotion.mutateAsync();
       }
     } catch {
       toast.error("Failed to initiate connection");
@@ -118,9 +135,19 @@ export default function IntegrationsSettings() {
     }
   };
 
+  const handleSetupNotion = async (id: number) => {
+    try {
+      const res = await setupNotion.mutateAsync(id);
+      toast.success("Notion Research database created!");
+      if (res.databaseUrl) window.open(res.databaseUrl, "_blank");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to setup database");
+    }
+  };
+
   const connectedProviders = new Set(integrations?.map((i) => i.provider) ?? []);
 
-  const availableProviders: ("google_drive" | "dropbox")[] = ["google_drive", "dropbox"];
+  const availableProviders: ("google_drive" | "dropbox" | "notion")[] = ["google_drive", "dropbox", "notion"];
 
   return (
     <div className="min-h-full p-6 md:p-8 max-w-4xl mx-auto space-y-10">
@@ -299,6 +326,22 @@ export default function IntegrationsSettings() {
                         </span>
                       )}
                       <div className="flex items-center gap-1">
+                        {integration.provider === "notion" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                            onClick={() => handleSetupNotion(integration.id)}
+                            disabled={setupNotion.isPending}
+                            title="Setup Research Database"
+                          >
+                            {setupNotion.isPending ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Sparkles className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"

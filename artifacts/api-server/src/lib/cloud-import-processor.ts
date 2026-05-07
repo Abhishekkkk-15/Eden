@@ -108,6 +108,66 @@ async function downloadFromGoogleDrive(
   return Buffer.from(arrayBuffer);
 }
 
+// ── Download content from Notion ─────────────────────────────────────────────
+async function downloadFromNotion(
+  accessToken: string,
+  pageId: string,
+  objectType: "page" | "database"
+): Promise<Buffer> {
+  // If it's a database, we might want to list entries, but for now let's just get the title
+  // For a page, we fetch all blocks and convert to text
+  if (objectType === "database") {
+    const res = await fetch(`https://api.notion.com/v1/databases/${pageId}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Notion-Version": "2022-06-28",
+      },
+    });
+    const data = await res.json();
+    const title = (data as any).title?.[0]?.plain_text || "Untitled Database";
+    return Buffer.from(`# Notion Database: ${title}\n\n[Database View Not Supported Yet - Only Page Content Ingested]`);
+  }
+
+  // Fetch page blocks
+  let textContent = "";
+  let cursor: string | undefined;
+
+  do {
+    const res = await fetch(`https://api.notion.com/v1/blocks/${pageId}/children?page_size=100${cursor ? `&start_cursor=${cursor}` : ""}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Notion-Version": "2022-06-28",
+      },
+    });
+
+    if (!res.ok) break;
+
+    const data = await res.json();
+    const blocks = (data as any).results;
+
+    for (const block of blocks) {
+      const type = block.type;
+      const content = block[type]?.rich_text?.[0]?.plain_text;
+      if (content) {
+        if (type.startsWith("heading_")) {
+          const level = type.split("_")[1];
+          textContent += `${"#".repeat(parseInt(level))} ${content}\n\n`;
+        } else if (type === "bulleted_list_item") {
+          textContent += `* ${content}\n`;
+        } else if (type === "numbered_list_item") {
+          textContent += `1. ${content}\n`;
+        } else {
+          textContent += `${content}\n\n`;
+        }
+      }
+    }
+
+    cursor = (data as any).next_cursor;
+  } while (cursor);
+
+  return Buffer.from(textContent);
+}
+
 // ── Process a single queue item ───────────────────────────────────────────────
 async function processQueueItem(itemId: number) {
   try {
@@ -148,11 +208,16 @@ async function processQueueItem(itemId: number) {
 
     if (integration.provider === "dropbox") {
       fileBuffer = await downloadFromDropbox(integration.accessToken, filePath);
-    } else if (integration.provider === "google_drive") {
       fileBuffer = await downloadFromGoogleDrive(
         integration.accessToken,
         item.providerFileId,
         item.mimeType
+      );
+    } else if (integration.provider === "notion") {
+      fileBuffer = await downloadFromNotion(
+        integration.accessToken,
+        item.providerFileId,
+        item.mimeType === "application/vnd.notion-database" ? "database" : "page"
       );
     } else {
       throw new Error(`Unsupported provider: ${integration.provider}`);
@@ -181,12 +246,14 @@ async function processQueueItem(itemId: number) {
         indexOnlyUrl = `https://drive.google.com/file/d/${item.providerFileId}/view`;
       } else if (integration.provider === "dropbox") {
         indexOnlyUrl = `https://www.dropbox.com/home${item.providerFilePath}`;
+      } else if (integration.provider === "notion") {
+        indexOnlyUrl = `https://www.notion.so/${item.providerFileId.replace(/-/g, "")}`;
       }
     }
 
     // Basic text extraction for document/text kinds
     let content = "";
-    if (mimeType === "text/plain" || mimeType === "text/markdown") {
+    if (mimeType === "text/plain" || mimeType === "text/markdown" || mimeType === "application/vnd.notion-page") {
       content = fileBuffer.toString("utf-8");
     }
 

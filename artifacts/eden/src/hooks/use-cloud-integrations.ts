@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE_URL } from "@/config";
 export interface CloudIntegration {
   id: number;
-  provider: "google_drive" | "dropbox" | "one_drive";
+  provider: "google_drive" | "dropbox" | "one_drive" | "notion";
   providerAccountEmail: string | null;
   isActive: boolean;
   lastSyncedAt: string | null;
@@ -60,6 +60,16 @@ async function getDropboxAuthUrl(): Promise<{ authUrl: string }> {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error("Failed to get Dropbox auth URL");
+  return res.json();
+}
+
+// GET /cloud/notion/auth - Get Notion OAuth URL
+async function getNotionAuthUrl(): Promise<{ authUrl: string }> {
+  const token = localStorage.getItem("token");
+  const res = await fetch(`${API_BASE_URL}/cloud/notion/auth`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to get Notion auth URL");
   return res.json();
 }
 
@@ -202,6 +212,37 @@ export function useConnectDropbox() {
     onSuccess: (data) => {
       // Open OAuth popup or redirect
       window.location.href = data.authUrl;
+    },
+  });
+}
+
+export function useConnectNotion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: getNotionAuthUrl,
+    onSuccess: (data) => {
+      window.location.href = data.authUrl;
+    },
+  });
+}
+
+export function useSetupNotionDatabase() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/cloud/integrations/${id}/notion/setup`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to setup database");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cloud-integrations"] });
     },
   });
 }

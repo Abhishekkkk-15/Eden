@@ -31,6 +31,8 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 const DROPBOX_APP_KEY = process.env.DROPBOX_APP_KEY || "";
 const DROPBOX_APP_SECRET = process.env.DROPBOX_APP_SECRET || "";
+const NOTION_CLIENT_ID = process.env.NOTION_CLIENT_ID || "";
+const NOTION_CLIENT_SECRET = process.env.NOTION_CLIENT_SECRET || "";
 const APP_URL = process.env.APP_URL || "http://localhost:3000";
 const API_URL = process.env.API_URL || "http://localhost:4000";
 console.log(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET);
@@ -255,6 +257,104 @@ router.get("/cloud/dropbox/callback", async (req, res) => {
   }
 });
 
+// ============== NOTION OAUTH ==============
+
+// GET /cloud/notion/auth - Start Notion OAuth flow
+router.get("/cloud/notion/auth", async (req, res) => {
+  const user = getUserFromHeader(req);
+  if (!user) {
+    res.status(401).json({ error: "Unauthorized: Missing or invalid token" });
+    return;
+  }
+
+  if (!NOTION_CLIENT_ID) {
+    res.status(500).json({ error: "Notion integration not configured" });
+    return;
+  }
+
+  const redirectUri = `${API_URL}/api/cloud/notion/callback`;
+  const state = Buffer.from(
+    JSON.stringify({
+      userId: user.id,
+      redirect: `${APP_URL}/settings/integrations?provider=notion`,
+    }),
+  ).toString("base64");
+
+  const authUrl = new URL("https://api.notion.com/v1/oauth/authorize");
+  authUrl.searchParams.set("client_id", NOTION_CLIENT_ID);
+  authUrl.searchParams.set("redirect_uri", redirectUri);
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("owner", "user");
+  authUrl.searchParams.set("state", state);
+
+  res.json({ authUrl: authUrl.toString() });
+  return;
+});
+
+// GET /cloud/notion/callback - OAuth callback
+router.get("/cloud/notion/callback", async (req, res) => {
+  const { code, state, error } = req.query;
+
+  if (error || !code) {
+    console.error("Notion OAuth error:", error);
+    res.redirect(`${APP_URL}/settings/integrations?error=auth_failed`);
+    return;
+  }
+
+  try {
+    const stateData = JSON.parse(
+      Buffer.from(state as string, "base64").toString(),
+    );
+    const redirectUri = `${API_URL}/api/cloud/notion/callback`;
+
+    // Exchange code for tokens
+    const authHeader = Buffer.from(`${NOTION_CLIENT_ID}:${NOTION_CLIENT_SECRET}`).toString("base64");
+    const tokenResponse = await fetch("https://api.notion.com/v1/oauth/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Basic ${authHeader}`,
+      },
+      body: JSON.stringify({
+        grant_type: "authorization_code",
+        code: code as string,
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    const tokens = await tokenResponse.json();
+
+    if (!tokenResponse.ok) {
+      console.error("Notion token exchange failed:", tokens);
+      res.redirect(`${APP_URL}/settings/integrations?error=token_exchange_failed`);
+      return;
+    }
+
+    // Store integration
+    await db.insert(cloudIntegrationsTable).values({
+      userId: stateData.userId,
+      provider: "notion",
+      accessToken: (tokens as any).access_token,
+      providerAccountId: (tokens as any).workspace_id,
+      providerAccountEmail: (tokens as any).workspace_name || "Notion Workspace",
+      syncSettings: {
+        workspaceName: (tokens as any).workspace_name,
+        workspaceIcon: (tokens as any).workspace_icon,
+        owner: (tokens as any).owner,
+      },
+      isActive: true,
+      lastSyncedAt: new Date(),
+    });
+
+    res.redirect(stateData.redirect + "&status=connected");
+    return;
+  } catch (err) {
+    console.error("Notion OAuth callback error:", err);
+    res.redirect(`${APP_URL}/settings/integrations?error=callback_failed`);
+    return;
+  }
+});
+
 // ============== PROTECTED ROUTES (Require Authentication) ==============
 router.use(authenticate);
 
@@ -281,11 +381,106 @@ router.get("/cloud/integrations", async (req, res) => {
       .orderBy(desc(cloudIntegrationsTable.createdAt));
 
     res.json(integrations);
-    return;
   } catch (error) {
-    console.error("Failed to fetch cloud integrations:", error);
     res.status(500).json({ error: "Failed to fetch integrations" });
-    return;
+  }
+});
+
+// POST /cloud/integrations/:id/notion/setup - Create the research database
+router.post("/cloud/integrations/:id/notion/setup", async (req, res) => {
+  const user = (req as any).user;
+  const integrationId = parseInt(req.params.id);
+
+  try {
+    const [integration] = await db
+      .select()
+      .from(cloudIntegrationsTable)
+      .where(
+        and(
+          eq(cloudIntegrationsTable.id, integrationId),
+          eq(cloudIntegrationsTable.userId, user.id),
+          eq(cloudIntegrationsTable.provider, "notion")
+        )
+      );
+
+    if (!integration) {
+      res.status(404).json({ error: "Integration not found" });
+      return;
+    }
+
+    const accessToken = integration.accessToken;
+
+    // 1. Find a parent page to host the database
+    const searchRes = await fetch("https://api.notion.com/v1/search", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        filter: { property: "object", value: "page" },
+        page_size: 1
+      }),
+    });
+
+    const searchData = await searchRes.json();
+    const parentPage = (searchData as any).results?.[0];
+
+    if (!parentPage) {
+      res.status(400).json({ error: "No accessible Notion pages found. Please share a page with Eden first." });
+      return;
+    }
+
+    // 2. Create the "Eden Research" database
+    const createRes = await fetch("https://api.notion.com/v1/databases", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        parent: { type: "page_id", page_id: parentPage.id },
+        title: [{ type: "text", text: { content: "Eden Research" } }],
+        properties: {
+          Name: { title: {} },
+          Status: {
+            select: {
+              options: [
+                { name: "Pending", color: "gray" },
+                { name: "Analyzing...", color: "yellow" },
+                { name: "Done", color: "green" }
+              ]
+            }
+          },
+          "Eden Report": { rich_text: {} }
+        }
+      }),
+    });
+
+    if (!createRes.ok) {
+      const error = await createRes.text();
+      throw new Error(`Failed to create database: ${error}`);
+    }
+
+    const newDb = await createRes.json();
+
+    // Store the database ID in syncSettings
+    await db.update(cloudIntegrationsTable)
+      .set({
+        syncSettings: {
+          ...(integration.syncSettings as any),
+          researchDatabaseId: (newDb as any).id,
+          researchDatabaseUrl: (newDb as any).url,
+        }
+      })
+      .where(eq(cloudIntegrationsTable.id, integrationId));
+
+    res.json({ success: true, databaseUrl: (newDb as any).url });
+  } catch (error) {
+    console.error("Notion setup error:", error);
+    res.status(500).json({ error: "Failed to automate Notion setup" });
   }
 });
 
@@ -467,6 +662,8 @@ router.get("/cloud/integrations/:id/files", async (req, res) => {
       );
     } else if (integration.provider === "dropbox") {
       files = await listDropboxFiles(integration.accessToken, path as string);
+    } else if (integration.provider === "notion") {
+      files = await listNotionItems(integration.accessToken);
     }
 
     console.log("[DEBUG] Returning files (before filtering):", { count: files.length });
@@ -1882,6 +2079,40 @@ router.post("/cloud/integrations/:id/export", async (req, res) => {
     return;
   }
 });
+
+async function listNotionItems(accessToken: string) {
+  const response = await fetch("https://api.notion.com/v1/search", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Notion-Version": "2022-06-28",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      sort: {
+        direction: "descending",
+        timestamp: "last_edited_time",
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Notion search failed: ${error}`);
+  }
+
+  const data = await response.json();
+  return (data as any).results.map((item: any) => ({
+    id: item.id,
+    name: item.properties?.title?.title?.[0]?.plain_text || 
+          item.properties?.Name?.title?.[0]?.plain_text || 
+          item.title?.[0]?.plain_text || 
+          "Untitled",
+    type: "file", // We treat pages/databases as files for import purposes
+    mimeType: item.object === "page" ? "application/vnd.notion-page" : "application/vnd.notion-database",
+    modifiedAt: item.last_edited_time,
+  }));
+}
 
 export default router;
 export { listGoogleDriveFiles, listDropboxFiles };

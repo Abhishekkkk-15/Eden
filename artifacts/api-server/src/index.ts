@@ -3,6 +3,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startJobQueueProcessor } from "./lib/job-queue";
 import { startCloudImportProcessor } from "./lib/cloud-import-processor";
+import { startNotionAgent } from "./lib/notion-agent";
 import { initEmbeddingExtension } from "./lib/embed-init";
 
 const rawPort = process.env["PORT"];
@@ -28,6 +29,9 @@ const stopJobProcessor = startJobQueueProcessor();
 // Start cloud import processor (handles Dropbox/Google Drive imports)
 const stopCloudImportProcessor = startCloudImportProcessor();
 
+// Start autonomous Notion agent
+const stopNotionAgent = startNotionAgent();
+
 app.listen(port, (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
@@ -42,6 +46,7 @@ process.on("SIGINT", () => {
   logger.info("Shutting down server...");
   stopJobProcessor();
   stopCloudImportProcessor();
+  stopNotionAgent();
   process.exit(0);
 });
 
@@ -49,5 +54,6 @@ process.on("SIGTERM", () => {
   logger.info("Shutting down server...");
   stopJobProcessor();
   stopCloudImportProcessor();
+  stopNotionAgent();
   process.exit(0);
 });
