@@ -197,22 +197,18 @@ function AIAnalysisDialog({
     
     setIsAnalyzing(true);
     setAnalysis("");
-    setIsStreaming(true);
-
     try {
-      // Use server-side analysis endpoint for full document content
       const result = await analyzeFile.mutateAsync({
         integrationId,
         fileId: file.id,
         data: { prompt, maxTokens: 2000 },
       });
-      
       setAnalysis(result.analysis);
     } catch (error) {
-      toast.error("Failed to analyze file");
+      const errorMsg = (error as any).message || "Failed to analyze file";
+      toast.error(errorMsg);
     } finally {
       setIsAnalyzing(false);
-      setIsStreaming(false);
     }
   };
 

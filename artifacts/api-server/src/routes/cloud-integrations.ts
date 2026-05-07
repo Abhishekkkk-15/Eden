@@ -1130,6 +1130,7 @@ router.post(
       let fileName = "file";
       let content = "";
       let mimeType = "";
+      console.log(`[AI Analyze] Starting analysis for file ${fileId} via integration ${integrationId} (${integration.provider})`);
 
       if (integration.provider === "google_drive") {
         const metaResponse = await fetch(
@@ -1141,6 +1142,7 @@ router.post(
         const metadata = await metaResponse.json() as any;
         fileName = metadata.name;
         mimeType = metadata.mimeType;
+        console.log(`[AI Analyze] Google Drive Metadata: name=${fileName}, mimeType=${mimeType}`);
 
         // Try to export to text if it's a Google Doc or a type that supports it
         let downloadUrl: string;
@@ -1158,6 +1160,7 @@ router.post(
           downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
         }
 
+        console.log(`[AI Analyze] Google Drive Download URL: ${downloadUrl}`);
         const contentResponse = await fetch(downloadUrl, {
           headers: { Authorization: `Bearer ${integration.accessToken}` },
         });
@@ -1184,6 +1187,7 @@ router.post(
         } else {
           content = await contentResponse.text();
         }
+        console.log(`[AI Analyze] Google Drive content downloaded, length=${content.length}`);
       } else if (integration.provider === "dropbox") {
         // Decode path if it was encoded by frontend
         const path =
@@ -1225,6 +1229,7 @@ router.post(
         if (!contentResponse.ok)
           throw new Error("Failed to download Dropbox content");
         content = await contentResponse.text();
+        console.log(`[AI Analyze] Dropbox content downloaded, length=${content.length}`);
       } else {
         res.status(400).json({ error: "Unsupported provider for direct analysis" });
         return;
@@ -1232,7 +1237,7 @@ router.post(
 
       // Clean up content (remove non-printable characters if it's a binary file)
       const cleanContent = content
-        .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "")
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
         .trim();
       if (cleanContent.length < 10 && content.length > 100) {
         // Likely a binary file with no printable text
@@ -1250,9 +1255,12 @@ router.post(
           content.slice(0, maxLength) + "\n\n[Content truncated...]"
         : content;
 
+      console.log(`[AI Analyze] Final content length for AI: ${truncatedContent.length}`);
+
       // Call AI analysis (using existing Groq integration)
+      const groqBaseUrl = process.env.AI_INTEGRATIONS_GROQ_BASE_URL || "https://api.groq.com/openai/v1";
       const aiResponse = await fetch(
-        `${process.env.AI_INTEGRATIONS_GROQ_BASE_URL}/chat/completions`,
+        `${groqBaseUrl}/chat/completions`,
         {
           method: "POST",
           headers: {
@@ -1278,13 +1286,16 @@ router.post(
       );
 
       if (!aiResponse.ok) {
-        throw new Error("AI analysis failed");
+        const errorText = await aiResponse.text();
+        console.error("Groq API error:", errorText);
+        throw new Error(`AI analysis failed: ${aiResponse.status} ${aiResponse.statusText}`);
       }
 
       const aiResult = await aiResponse.json() as any;
       const analysis =
         aiResult.choices?.[0]?.message?.content || "No analysis available";
 
+      console.log(`[AI Analyze] Success: Analysis generated (${analysis.length} chars)`);
       res.json({
         fileId,
         fileName,
@@ -1348,8 +1359,9 @@ router.post("/cloud/integrations/:id/ai-create-document", async (req, res) => {
     }
 
     // Generate content with AI
+    const groqBaseUrl = process.env.AI_INTEGRATIONS_GROQ_BASE_URL || "https://api.groq.com/openai/v1";
     const aiResponse = await fetch(
-      `${process.env.AI_INTEGRATIONS_GROQ_BASE_URL}/chat/completions`,
+      `${groqBaseUrl}/chat/completions`,
       {
         method: "POST",
         headers: {
