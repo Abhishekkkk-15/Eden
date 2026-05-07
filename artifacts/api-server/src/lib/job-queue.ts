@@ -1,7 +1,7 @@
 import { db, jobQueueTable, sourcesTable, transcriptionsTable, sourceChunksTable } from "@workspace/db";
 import { eq, and, asc, lte } from "drizzle-orm";
 import { summarize, completeText, extractEntities } from "./ai";
-import { transcribeSource } from "./transcription";
+import { transcribeSource, transcribeImage, transcribeVideoFrames } from "./transcription";
 
 // Job processor configuration
 const JOB_POLL_INTERVAL = 5000; // Check for jobs every 5 seconds
@@ -219,15 +219,28 @@ async function processTranscriptionJob(job: typeof jobQueueTable.$inferSelect) {
 async function processVideoAnalysisJob(job: typeof jobQueueTable.$inferSelect) {
   const { entityId } = job;
 
-  await updateJobProgress(job.id, 50, "Analyzing video frames...");
+  await updateJobProgress(job.id, 10, "Fetching source...");
 
-  // This would call the video frame extraction and analysis
-  // For now, just simulate progress
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  const [source] = await db
+    .select()
+    .from(sourcesTable)
+    .where(eq(sourcesTable.id, entityId));
 
-  await updateJobProgress(job.id, 100, "Analysis complete");
+  if (!source || !source.mediaPath) {
+    throw new Error("Source not found or has no media");
+  }
 
-  return { analyzed: true };
+  await updateJobProgress(job.id, 30, "Analyzing video frames with Vision AI...");
+
+  const { frameCount, descriptions } = await transcribeVideoFrames(
+    entityId,
+    source.mediaPath,
+    source.title
+  );
+
+  await updateJobProgress(job.id, 100, `Complete: Analyzed ${frameCount} frames`);
+
+  return { frameCount, descriptionsLength: descriptions.length };
 }
 
 /**
@@ -236,14 +249,24 @@ async function processVideoAnalysisJob(job: typeof jobQueueTable.$inferSelect) {
 async function processImageAnalysisJob(job: typeof jobQueueTable.$inferSelect) {
   const { entityId } = job;
 
-  await updateJobProgress(job.id, 50, "Analyzing image...");
+  await updateJobProgress(job.id, 10, "Fetching source...");
 
-  // This would call the image vision analysis
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  const [source] = await db
+    .select()
+    .from(sourcesTable)
+    .where(eq(sourcesTable.id, entityId));
+
+  if (!source || !source.mediaPath) {
+    throw new Error("Source not found or has no media");
+  }
+
+  await updateJobProgress(job.id, 50, "Analyzing image with Vision AI...");
+
+  const transcription = await transcribeImage(entityId, source.mediaPath);
 
   await updateJobProgress(job.id, 100, "Analysis complete");
 
-  return { analyzed: true };
+  return { transcriptionLength: transcription.length };
 }
 
 /**

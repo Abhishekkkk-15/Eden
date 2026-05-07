@@ -291,7 +291,12 @@ async function processQueueItem(itemId: number) {
     // ── Trigger AI Jobs ────────────────────────────────────────────────────
     try {
       if (kind === "audio" || kind === "video") {
-        if (!item.indexOnly) await queueJob(item.userId, "transcribe", "source", source.id, {});
+        if (!item.indexOnly) {
+          await queueJob(item.userId, "transcribe", "source", source.id, {});
+          if (kind === "video") {
+            await queueJob(item.userId, "analyze_video", "source", source.id, {});
+          }
+        }
       } else if (kind === "image") {
         if (!item.indexOnly) await queueJob(item.userId, "analyze_image", "source", source.id, {});
       } else if (kind === "document" || kind === "text") {
