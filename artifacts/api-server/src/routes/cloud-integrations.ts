@@ -4,6 +4,7 @@ import {
   cloudIntegrationsTable,
   cloudImportQueueTable,
   sourcesTable,
+  pagesTable,
 } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod";
