@@ -165,6 +165,9 @@ function BlockRow({
   const [slashOpen, setSlashOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [tempType, setTempType] = useState<BlockType | null>(null);
+
+  const currentType = tempType ?? block.type;
 
   useEffect(() => {
     if (!editorRef.current || isGenerating) return;
@@ -186,6 +189,10 @@ function BlockRow({
   const handleAIKeyPress = async (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && prompt.trim()) {
       setIsGenerating(true);
+      setTempType("text");
+      
+      await new Promise(resolve => setTimeout(resolve, 0));
+
       let fullContent = "";
       try {
         const stream = streamChat([
@@ -206,16 +213,18 @@ function BlockRow({
         toast.error("AI generation failed");
       } finally {
         setIsGenerating(false);
+        setTempType(null);
         setPrompt("");
       }
     } else if (e.key === "Escape") {
+      setTempType(null);
       onChangeType("text");
       setPrompt("");
     }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && block.type !== "code") {
+    if (e.key === "Enter" && !e.shiftKey && currentType !== "code") {
       e.preventDefault();
       onAddAfter();
       return;
@@ -235,11 +244,16 @@ function BlockRow({
       editorRef.current.innerText = "";
     }
     onChangeContent("");
-    onChangeType(type);
-    setTimeout(() => editorRef.current?.focus(), 0);
+    
+    if ((type as string) === "ai") {
+      setTempType("ai" as any);
+    } else {
+      onChangeType(type);
+      setTimeout(() => editorRef.current?.focus(), 0);
+    }
   };
 
-  if (block.type === "divider") {
+  if (currentType === "divider") {
     return (
       <div
         className="group relative flex items-center gap-2 py-2"
@@ -272,23 +286,23 @@ function BlockRow({
         onDelete={onDelete}
       />
 
-      {block.type === "todo" && (
+      {currentType === "todo" && (
         <Checkbox
           checked={block.checked}
           onCheckedChange={(v) => onToggleChecked(Boolean(v))}
           className="mt-2"
         />
       )}
-      {block.type === "bulleted" && (
+      {currentType === "bulleted" && (
         <span className="mt-2 select-none text-muted-foreground">{"•"}</span>
       )}
-      {block.type === "numbered" && (
+      {currentType === "numbered" && (
         <span className="mt-1 select-none text-muted-foreground tabular-nums">
           {numberedIndex}.
         </span>
       )}
 
-      {(block.type as string) === "ai" ? (
+      {(currentType as string) === "ai" ? (
         <div className="flex-1 relative flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20 shadow-[0_0_15px_rgba(var(--primary),0.05)]">
           <Sparkles className="w-4 h-4 text-primary shrink-0" />
           <input
@@ -315,13 +329,13 @@ function BlockRow({
               ref={editorRef}
               contentEditable
               suppressContentEditableWarning
-              data-placeholder={placeholderFor(block.type)}
+              data-placeholder={placeholderFor(currentType)}
               onInput={handleInput}
               onKeyDown={handleKeyDown}
               onFocus={onFocus}
               className={`flex-1 min-h-[1.75rem] outline-none rounded-sm transition-colors ${classesFor(
-                block.type,
-              )} ${block.type === "todo" && block.checked ? "line-through text-muted-foreground" : ""} empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/50 ${
+                currentType,
+              )} ${currentType === "todo" && block.checked ? "line-through text-muted-foreground" : ""} empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/50 ${
                 isFocused ? "" : ""
               }`}
             />
