@@ -158,6 +158,24 @@ async function exportCloudFile(
   return res.json();
 }
 
+// PATCH /cloud/integrations/:id - Update integration settings
+async function updateCloudIntegrationSettings(
+  id: number,
+  data: { isActive?: boolean; syncSettings?: Record<string, any> }
+): Promise<CloudIntegration> {
+  const token = localStorage.getItem("token");
+  const res = await fetch(`${API_BASE_URL}/cloud/integrations/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update integration settings");
+  return res.json();
+}
+
 // React Query hooks
 export function useCloudIntegrations() {
   return useQuery({
@@ -402,6 +420,18 @@ export function useCreateAIDocument() {
       createAIDocument(integrationId, data),
     onSuccess: (_, { integrationId }) => {
       queryClient.invalidateQueries({ queryKey: ["cloud-files", integrationId] });
+    },
+  });
+}
+
+export function useUpdateCloudIntegration() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: { isActive?: boolean; syncSettings?: Record<string, any> } }) =>
+      updateCloudIntegrationSettings(id, data),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ["cloud-integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["cloud-files", id] });
     },
   });
 }

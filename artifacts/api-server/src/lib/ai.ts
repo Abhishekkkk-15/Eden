@@ -118,6 +118,9 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     model: "nvidia/nv-embedqa-e5-v5",
     input: text.slice(0, 8192),
     encoding_format: "float",
+    extra_body: {
+      input_type: "passage"
+    }
   } as any);
   return ((res.data[0] as any).embedding) as number[];
 }

@@ -8,6 +8,7 @@ import {
   useDownloadCloudFile,
   useAnalyzeCloudFile,
   useCreateAIDocument,
+  useUpdateCloudIntegration,
   type CloudFile 
 } from "@/hooks/use-cloud-integrations";
 import { Button } from "@/components/ui/button";
@@ -63,6 +64,8 @@ import {
   FolderInput,
   FileOutput,
   FolderOpen,
+  Settings2,
+  CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -511,6 +514,127 @@ function RenameDialog({
   );
 }
 
+// Cloud Settings Dialog
+function CloudSettingsDialog({
+  open,
+  onOpenChange,
+  integration,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  integration: any;
+}) {
+  const updateSettings = useUpdateCloudIntegration();
+  const [defaultImportMode, setDefaultImportMode] = useState<"download" | "index">(
+    integration?.syncSettings?.defaultImportMode || "download"
+  );
+  const [fileTypeFilters, setFileTypeFilters] = useState<string[]>(
+    integration?.syncSettings?.fileTypeFilters || []
+  );
+
+  const handleSave = async () => {
+    try {
+      await updateSettings.mutateAsync({
+        id: integration.id,
+        data: {
+          syncSettings: {
+            ...integration.syncSettings,
+            defaultImportMode,
+            fileTypeFilters,
+          },
+        },
+      });
+      toast.success("Settings updated");
+      onOpenChange(false);
+    } catch {
+      toast.error("Failed to update settings");
+    }
+  };
+
+  const toggleFilter = (filter: string) => {
+    setFileTypeFilters((prev) =>
+      prev.includes(filter) ? prev.filter((f) => f !== filter) : [...prev, filter]
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-xl font-bold tracking-tight">
+            <Settings2 className="w-6 h-6 text-primary" />
+            Integration Settings
+          </DialogTitle>
+          <DialogDescription>
+            Configure how Eden interacts with your {integration?.provider?.replace("_", " ")} account.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-6 py-4">
+          <div className="space-y-3">
+            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Default Import Mode</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant={defaultImportMode === "download" ? "default" : "outline"}
+                onClick={() => setDefaultImportMode("download")}
+                className="h-20 flex flex-col items-center justify-center gap-2 rounded-xl"
+              >
+                <RefreshCw className="w-5 h-5" />
+                <span className="text-xs font-bold">Full Import</span>
+              </Button>
+              <Button
+                variant={defaultImportMode === "index" ? "default" : "outline"}
+                onClick={() => setDefaultImportMode("index")}
+                className="h-20 flex flex-col items-center justify-center gap-2 rounded-xl"
+              >
+                <CheckCircle2 className="w-5 h-5" />
+                <span className="text-xs font-bold">Index Only</span>
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              Full Import downloads files to Eden. Index Only keeps files in the cloud and only stores metadata for search.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">File Type Visibility</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: "image", icon: FileImage, label: "Images" },
+                { id: "video", icon: FileVideo, label: "Videos" },
+                { id: "audio", icon: FileAudio, label: "Audio" },
+                { id: "document", icon: FileText, label: "Documents" },
+              ].map((item) => (
+                <Button
+                  key={item.id}
+                  variant={fileTypeFilters.includes(item.id) || fileTypeFilters.length === 0 ? "default" : "outline"}
+                  onClick={() => toggleFilter(item.id)}
+                  size="sm"
+                  className="justify-start gap-2 rounded-lg h-10 px-3"
+                >
+                  <item.icon className="w-4 h-4" />
+                  <span className="text-xs">{item.label}</span>
+                </Button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Selected types will be visible in the browser. Unselect all to show everything.
+            </p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} className="rounded-xl">
+            Cancel
+          </Button>
+          <Button onClick={handleSave} className="rounded-xl px-8 shadow-lg">
+            {updateSettings.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+            Apply Changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // AI Create Document Dialog
 function AICreateDocumentDialog({
   open,
@@ -606,7 +730,8 @@ export function CloudFileBrowser({
   targetPageId, 
   onImport,
   enableCrud = true,
-}: FileBrowserProps) {
+  integrations,
+}: FileBrowserProps & { integrations?: any[] }) {
   const [currentPath, setCurrentPath] = useState<string>("");
   const [breadcrumbs, setBreadcrumbs] = useState<Array<{ name: string; path: string }>>([
     { name: "Root", path: "" },
@@ -619,6 +744,10 @@ export function CloudFileBrowser({
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isAIAnalysisOpen, setIsAIAnalysisOpen] = useState(false);
   const [isAICreateOpen, setIsAICreateOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const currentIntegration = integrations?.find(i => i.id === integrationId);
+  const defaultMode = currentIntegration?.syncSettings?.defaultImportMode || "download";
 
   const { data, isLoading, error, refetch } = useCloudFiles(integrationId, currentPath);
   const importFile = useImportCloudFile();
@@ -807,7 +936,7 @@ export function CloudFileBrowser({
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <Button 
                 variant="ghost" 
                 size="sm" 
@@ -817,6 +946,15 @@ export function CloudFileBrowser({
               >
                 <RefreshCw className={`w-3.5 h-3.5 mr-2 ${isLoading ? "animate-spin" : ""}`} />
                 {isLoading ? "Syncing..." : "Refresh"}
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setIsSettingsOpen(true)}
+                className="h-8 w-8 p-0 rounded-full hover:bg-muted"
+                title="Settings"
+              >
+                <Settings2 className="w-4 h-4" />
               </Button>
             </div>
           </div>
@@ -897,7 +1035,7 @@ export function CloudFileBrowser({
                           className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity rounded-full hover:bg-primary/10 hover:text-primary"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleImport(file);
+                            handleImport(file, defaultMode === "index");
                           }}
                           disabled={importingFile === file.id}
                         >
@@ -919,7 +1057,6 @@ export function CloudFileBrowser({
                           onAnalyze={() => openAIAnalysis(file)}
                           onImport={() => handleImport(file, false)}
                           onIndexOnly={() => handleImport(file, true)}
-                          onAICreate={() => setIsAICreateOpen(true)}
                         />
                       </div>
                     </div>
@@ -959,6 +1096,12 @@ export function CloudFileBrowser({
         onOpenChange={setIsAICreateOpen}
         onCreate={handleAICreate}
         isCreating={createAIDoc.isPending}
+      />
+
+      <CloudSettingsDialog
+        open={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
+        integration={integrations?.find(i => i.id === integrationId)}
       />
     </>
   );

@@ -274,6 +274,7 @@ router.get("/cloud/integrations", async (req, res) => {
         lastSyncedAt: cloudIntegrationsTable.lastSyncedAt,
         syncError: cloudIntegrationsTable.syncError,
         createdAt: cloudIntegrationsTable.createdAt,
+        syncSettings: cloudIntegrationsTable.syncSettings,
       })
       .from(cloudIntegrationsTable)
       .where(eq(cloudIntegrationsTable.userId, user.id))
@@ -284,6 +285,55 @@ router.get("/cloud/integrations", async (req, res) => {
   } catch (error) {
     console.error("Failed to fetch cloud integrations:", error);
     res.status(500).json({ error: "Failed to fetch integrations" });
+    return;
+  }
+});
+
+// PATCH /cloud/integrations/:id - Update integration settings
+router.patch("/cloud/integrations/:id", async (req, res) => {
+  const user = (req as any).user;
+  const integrationId = parseInt(req.params.id);
+
+  if (isNaN(integrationId)) {
+    res.status(400).json({ error: "Invalid integration ID" });
+    return;
+  }
+
+  const schema = z.object({
+    isActive: z.boolean().optional(),
+    syncSettings: z.record(z.unknown()).optional(),
+  });
+
+  try {
+    const data = schema.parse(req.body);
+
+    const [updated] = await db
+      .update(cloudIntegrationsTable)
+      .set({
+        ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+        ...(data.syncSettings ? { syncSettings: data.syncSettings } : {}),
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(cloudIntegrationsTable.id, integrationId),
+        eq(cloudIntegrationsTable.userId, user.id)
+      ))
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ error: "Integration not found" });
+      return;
+    }
+
+    res.json(updated);
+    return;
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: "Invalid data", details: error.errors });
+    } else {
+      console.error("Failed to update cloud integration:", error);
+      res.status(500).json({ error: "Failed to update integration" });
+    }
     return;
   }
 });
@@ -419,7 +469,30 @@ router.get("/cloud/integrations/:id/files", async (req, res) => {
       files = await listDropboxFiles(integration.accessToken, path as string);
     }
 
-    console.log("[DEBUG] Returning files:", { count: files.length });
+    console.log("[DEBUG] Returning files (before filtering):", { count: files.length });
+
+    // Apply filters from syncSettings
+    const settings = integration.syncSettings as any;
+    if (settings?.fileTypeFilters && Array.isArray(settings.fileTypeFilters) && settings.fileTypeFilters.length > 0) {
+      const filters = settings.fileTypeFilters as string[];
+      files = files.filter(file => {
+        if (file.type === "folder") return true; // Always show folders
+        const mime = file.mimeType?.toLowerCase() || "";
+        if (filters.includes("image") && mime.startsWith("image/")) return true;
+        if (filters.includes("video") && mime.startsWith("video/")) return true;
+        if (filters.includes("audio") && mime.startsWith("audio/")) return true;
+        if (filters.includes("document") && (
+          mime === "application/pdf" || 
+          mime.includes("word") || 
+          mime.includes("text/") || 
+          mime.includes("google-apps.document") ||
+          mime.includes("google-apps.spreadsheet")
+        )) return true;
+        return false;
+      });
+    }
+
+    console.log("[DEBUG] Returning files (after filtering):", { count: files.length });
     res.json({ files, path });
     return;
   } catch (error) {

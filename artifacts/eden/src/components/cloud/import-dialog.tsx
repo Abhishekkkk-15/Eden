@@ -214,6 +214,7 @@ export function CloudImportDialog({ open, onOpenChange, targetPageId }: CloudImp
                     provider={selectedIntegration.provider}
                     targetPageId={targetPageId}
                     onImport={() => setActiveTab("queue")}
+                    integrations={activeIntegrations}
                   />
                 </div>
               ) : (

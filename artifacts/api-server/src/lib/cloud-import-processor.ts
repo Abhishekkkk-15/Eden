@@ -264,15 +264,16 @@ async function processQueueItem(itemId: number) {
             }
           }
         }
-        
-        await db
-          .update(sourcesTable)
-          .set({ status: "ready", updatedAt: new Date() })
-          .where(eq(sourcesTable.id, source.id));
       } catch (embedErr) {
         console.error(`[CloudImport] Embedding failed for source ${source.id}:`, embedErr);
       }
     }
+
+    // Always set source to ready once basic ingestion is done (even if no content/embedding)
+    await db
+      .update(sourcesTable)
+      .set({ status: "ready", updatedAt: new Date() })
+      .where(eq(sourcesTable.id, source.id));
 
     // ── Mark queue item as completed ───────────────────────────────────────
     await db
@@ -358,8 +359,33 @@ async function pollCloudImportQueue() {
 export function startCloudImportProcessor(): () => void {
   console.log("[CloudImport] Starting cloud import processor...");
 
-  // Run immediately, then on interval
-  void pollCloudImportQueue();
+  // Reset any stuck items (processing/downloading) from previous session back to pending
+  void (async () => {
+    try {
+      const { or, ne } = await import("drizzle-orm");
+      const results = await db
+        .update(cloudImportQueueTable)
+        .set({ status: "pending", updatedAt: new Date() })
+        .where(
+          and(
+            ne(cloudImportQueueTable.status, "completed"),
+            ne(cloudImportQueueTable.status, "failed"),
+            ne(cloudImportQueueTable.status, "pending")
+          )
+        )
+        .returning();
+      
+      if (results.length > 0) {
+        console.log(`[CloudImport] Reset ${results.length} stuck items to pending status`);
+      }
+    } catch (err) {
+      console.error("[CloudImport] Failed to reset stuck items:", err);
+    }
+    
+    // Run immediately after reset
+    void pollCloudImportQueue();
+  })();
+
   const interval = setInterval(pollCloudImportQueue, POLL_INTERVAL);
 
   return () => {
