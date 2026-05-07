@@ -310,7 +310,7 @@ function SourceCard({
   onSelect,
   isSelectionMode,
 }: {
-  source: Source & { isPage?: boolean };
+  source: SourceWithPage;
   onRename: (newTitle: string) => void;
   onDelete: () => void;
   onMove: (targetFolderId: number | null) => void;

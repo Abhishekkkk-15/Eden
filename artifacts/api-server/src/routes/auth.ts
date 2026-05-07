@@ -18,7 +18,8 @@ router.post("/signup", async (req, res) => {
 
     const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
     if (existing) {
-      return res.status(400).json({ error: "User already exists" });
+      res.status(400).json({ error: "User already exists" });
+      return;
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -35,6 +36,7 @@ router.post("/signup", async (req, res) => {
     res.status(201).json({ token, user: { id: user!.id, email: user!.email } });
   } catch (err) {
     res.status(400).json({ error: "Invalid data" });
+    return;
   }
 });
 
@@ -44,18 +46,21 @@ router.post("/login", async (req, res) => {
 
     const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email));
     if (!user || !user.password) {
-      return res.status(401).json({ error: "Invalid credentials" });
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
     }
 
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) {
-      return res.status(401).json({ error: "Invalid credentials" });
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
     }
 
     const token = signToken({ id: user.id, email: user.email });
     res.json({ token, user: { id: user.id, email: user.email } });
   } catch (err) {
     res.status(400).json({ error: "Invalid data" });
+    return;
   }
 });
 

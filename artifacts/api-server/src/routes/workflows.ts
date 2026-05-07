@@ -73,7 +73,8 @@ router.get("/workflows/:id", async (req, res) => {
   const workflowId = parseInt(req.params.id);
 
   if (isNaN(workflowId)) {
-    return res.status(400).json({ error: "Invalid workflow ID" });
+    res.status(400).json({ error: "Invalid workflow ID" });
+    return;
   }
 
   try {
@@ -83,7 +84,8 @@ router.get("/workflows/:id", async (req, res) => {
       .where(and(eq(workflowsTable.id, workflowId), eq(workflowsTable.userId, user.id)));
 
     if (!workflow) {
-      return res.status(404).json({ error: "Workflow not found" });
+      res.status(404).json({ error: "Workflow not found" });
+      return;
     }
 
     res.json(workflow);
@@ -99,7 +101,8 @@ router.put("/workflows/:id", async (req, res) => {
   const workflowId = parseInt(req.params.id);
 
   if (isNaN(workflowId)) {
-    return res.status(400).json({ error: "Invalid workflow ID" });
+    res.status(400).json({ error: "Invalid workflow ID" });
+    return;
   }
 
   try {
@@ -115,7 +118,8 @@ router.put("/workflows/:id", async (req, res) => {
       .returning();
 
     if (!workflow) {
-      return res.status(404).json({ error: "Workflow not found" });
+      res.status(404).json({ error: "Workflow not found" });
+      return;
     }
 
     res.json(workflow);
@@ -135,7 +139,8 @@ router.delete("/workflows/:id", async (req, res) => {
   const workflowId = parseInt(req.params.id);
 
   if (isNaN(workflowId)) {
-    return res.status(400).json({ error: "Invalid workflow ID" });
+    res.status(400).json({ error: "Invalid workflow ID" });
+    return;
   }
 
   try {
@@ -145,7 +150,8 @@ router.delete("/workflows/:id", async (req, res) => {
       .returning();
 
     if (!workflow) {
-      return res.status(404).json({ error: "Workflow not found" });
+      res.status(404).json({ error: "Workflow not found" });
+      return;
     }
 
     res.json({ success: true });
@@ -161,7 +167,8 @@ router.post("/workflows/:id/run", async (req, res) => {
   const workflowId = parseInt(req.params.id);
 
   if (isNaN(workflowId)) {
-    return res.status(400).json({ error: "Invalid workflow ID" });
+    res.status(400).json({ error: "Invalid workflow ID" });
+    return;
   }
 
   try {
@@ -171,7 +178,8 @@ router.post("/workflows/:id/run", async (req, res) => {
       .where(and(eq(workflowsTable.id, workflowId), eq(workflowsTable.userId, user.id)));
 
     if (!workflow) {
-      return res.status(404).json({ error: "Workflow not found" });
+      res.status(404).json({ error: "Workflow not found" });
+      return;
     }
 
     // Get optional sourceId from request body for manual runs
@@ -216,7 +224,8 @@ router.get("/workflows/:id/runs", async (req, res) => {
   const workflowId = parseInt(req.params.id);
 
   if (isNaN(workflowId)) {
-    return res.status(400).json({ error: "Invalid workflow ID" });
+    res.status(400).json({ error: "Invalid workflow ID" });
+    return;
   }
 
   try {
@@ -259,7 +268,8 @@ router.post("/jobs/:id/cancel", async (req, res) => {
   const jobId = parseInt(req.params.id);
 
   if (isNaN(jobId)) {
-    return res.status(400).json({ error: "Invalid job ID" });
+    res.status(400).json({ error: "Invalid job ID" });
+    return;
   }
 
   try {
@@ -270,7 +280,8 @@ router.post("/jobs/:id/cancel", async (req, res) => {
       .returning();
 
     if (!job) {
-      return res.status(404).json({ error: "Job not found" });
+      res.status(404).json({ error: "Job not found" });
+      return;
     }
 
     res.json(job);
@@ -286,7 +297,8 @@ router.post("/jobs/:id/retry", async (req, res) => {
   const jobId = parseInt(req.params.id);
 
   if (isNaN(jobId)) {
-    return res.status(400).json({ error: "Invalid job ID" });
+    res.status(400).json({ error: "Invalid job ID" });
+    return;
   }
 
   try {
@@ -296,7 +308,8 @@ router.post("/jobs/:id/retry", async (req, res) => {
       .where(and(eq(jobQueueTable.id, jobId), eq(jobQueueTable.userId, user.id)));
 
     if (!existingJob) {
-      return res.status(404).json({ error: "Job not found" });
+      res.status(404).json({ error: "Job not found" });
+      return;
     }
 
     const [job] = await db
@@ -337,37 +350,37 @@ async function executeWorkflow(
       try {
         switch (action.type) {
           case "tag":
-            result = await executeTagAction(action.config, userId);
+            result = await executeTagAction(action.config as any, userId);
             break;
           case "generate_tags":
-            result = await executeGenerateTagsAction(action.config.sourceId as number, action.config);
+            result = await executeGenerateTagsAction(action.config.sourceId as number, action.config as any);
             break;
           case "move_to_folder":
-            result = await executeMoveAction(action.config, userId);
+            result = await executeMoveAction(action.config as any, userId);
             break;
           case "ai_organize":
-            result = await executeAIOrganizeAction(action.config.sourceId as number, action.config, userId);
+            result = await executeAIOrganizeAction(action.config.sourceId as number, action.config as any, userId);
             break;
           case "summarize":
-            result = await executeSummarizeAction(action.config, userId);
+            result = await executeSummarizeAction(action.config as any, userId);
             break;
           case "transcribe":
-            result = await executeTranscribeAction(action.config, userId);
+            result = await executeTranscribeAction(action.config as any, userId);
             break;
           case "extract_entities":
-            result = await executeExtractEntitiesAction(action.config, userId);
+            result = await executeExtractEntitiesAction(action.config as any, userId);
             break;
           case "send_notification":
-            result = await executeSendNotificationAction(action.config, userId);
+            result = await executeSendNotificationAction(action.config as any, userId);
             break;
           case "webhook":
-            result = await executeWebhookAction(action.config);
+            result = await executeWebhookAction(action.config as any);
             break;
           case "ai_transform":
-            result = await executeAITransformAction(action.config, userId);
+            result = await executeAITransformAction(action.config as any, userId);
             break;
           case "ai_agent_process":
-            result = await executeAIAgentProcessAction(action.config, userId);
+            result = await executeAIAgentProcessAction(action.config as any, userId);
             break;
           default:
             throw new Error(`Unknown action type: ${action.type}`);
@@ -680,7 +693,7 @@ async function executeAIAgentProcessAction(config: { agentId?: number; sourceId?
 router.get("/workflows/folder-agent/:folderId", async (req, res) => {
   const user = (req as any).user;
   const folderId = parseInt(req.params.folderId);
-  if (isNaN(folderId)) return res.status(400).json({ error: "Invalid folderId" });
+  if (isNaN(folderId)) { res.status(400).json({ error: "Invalid folderId" }); return; }
 
   try {
     const workflows = await db
@@ -694,21 +707,23 @@ router.get("/workflows/folder-agent/:folderId", async (req, res) => {
       return Number(tc?.folderId) === folderId && actions.some((a) => a.type === "ai_agent_process");
     });
 
-    if (!folderAgentWorkflow) return res.json(null);
+    if (!folderAgentWorkflow) { res.json(null); return; }
 
     const actions = folderAgentWorkflow.actions as Array<{ type: string; config: Record<string, unknown> }>;
     const agentAction = actions.find((a) => a.type === "ai_agent_process");
     const agentId = agentAction?.config?.agentId;
-    if (!agentId) return res.json(null);
+    if (!agentId) { res.json(null); return; }
 
     const [agent] = await db.select().from(agentsTable).where(eq(agentsTable.id, Number(agentId)));
     res.json({
       workflowId: folderAgentWorkflow.id,
       agent: agent ? { id: agent.id, name: agent.name, emoji: agent.emoji } : null,
     });
+    return;
   } catch (error) {
     console.error("Failed to get folder agent:", error);
     res.status(500).json({ error: "Failed to get folder agent" });
+    return;
   }
 });
 
@@ -716,7 +731,7 @@ router.get("/workflows/folder-agent/:folderId", async (req, res) => {
 router.post("/workflows/folder-agent/:folderId", async (req, res) => {
   const user = (req as any).user;
   const folderId = parseInt(req.params.folderId);
-  if (isNaN(folderId)) return res.status(400).json({ error: "Invalid folderId" });
+  if (isNaN(folderId)) { res.status(400).json({ error: "Invalid folderId" }); return; }
 
   try {
     const { agentId } = z.object({ agentId: z.number() }).parse(req.body);
@@ -725,13 +740,13 @@ router.post("/workflows/folder-agent/:folderId", async (req, res) => {
       .select()
       .from(agentsTable)
       .where(and(eq(agentsTable.id, agentId), eq(agentsTable.userId, user.id)));
-    if (!agent) return res.status(404).json({ error: "Agent not found" });
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
 
     const [folder] = await db
       .select()
       .from(pagesTable)
       .where(and(eq(pagesTable.id, folderId), eq(pagesTable.userId, user.id)));
-    if (!folder) return res.status(404).json({ error: "Folder not found" });
+    if (!folder) { res.status(404).json({ error: "Folder not found" }); return; }
 
     const workflows = await db.select().from(workflowsTable).where(eq(workflowsTable.userId, user.id));
     const existing = workflows.find((w) => {
@@ -756,18 +771,21 @@ router.post("/workflows/folder-agent/:folderId", async (req, res) => {
         .set({ ...workflowData, updatedAt: new Date() })
         .where(eq(workflowsTable.id, existing.id))
         .returning();
-      return res.json({ workflowId: updated.id, agent: { id: agent.id, name: agent.name, emoji: agent.emoji } });
+      res.json({ workflowId: updated.id, agent: { id: agent.id, name: agent.name, emoji: agent.emoji } });
+      return;
     }
 
     const [created] = await db
       .insert(workflowsTable)
       .values({ userId: user.id, ...workflowData, runCount: 0 })
       .returning();
-    return res.status(201).json({ workflowId: created.id, agent: { id: agent.id, name: agent.name, emoji: agent.emoji } });
+    res.status(201).json({ workflowId: created.id, agent: { id: agent.id, name: agent.name, emoji: agent.emoji } });
+    return;
   } catch (error) {
-    if (error instanceof z.ZodError) return res.status(400).json({ error: "Invalid request body", details: error.errors });
+    if (error instanceof z.ZodError) { res.status(400).json({ error: "Invalid request body", details: error.errors }); return; }
     console.error("Failed to assign folder agent:", error);
     res.status(500).json({ error: "Failed to assign folder agent" });
+    return;
   }
 });
 
@@ -775,7 +793,7 @@ router.post("/workflows/folder-agent/:folderId", async (req, res) => {
 router.delete("/workflows/folder-agent/:folderId", async (req, res) => {
   const user = (req as any).user;
   const folderId = parseInt(req.params.folderId);
-  if (isNaN(folderId)) return res.status(400).json({ error: "Invalid folderId" });
+  if (isNaN(folderId)) { res.status(400).json({ error: "Invalid folderId" }); return; }
 
   try {
     const workflows = await db.select().from(workflowsTable).where(eq(workflowsTable.userId, user.id));
@@ -785,13 +803,15 @@ router.delete("/workflows/folder-agent/:folderId", async (req, res) => {
       return Number(tc?.folderId) === folderId && actions.some((a) => a.type === "ai_agent_process");
     });
 
-    if (!existing) return res.status(404).json({ error: "No agent assigned to this folder" });
+    if (!existing) { res.status(404).json({ error: "No agent assigned to this folder" }); return; }
 
     await db.delete(workflowsTable).where(eq(workflowsTable.id, existing.id));
     res.json({ success: true });
+    return;
   } catch (error) {
     console.error("Failed to remove folder agent:", error);
     res.status(500).json({ error: "Failed to remove folder agent" });
+    return;
   }
 });
 

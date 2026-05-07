@@ -107,6 +107,7 @@ async function importCloudFile(
     mimeType?: string;
     fileSize?: number;
     targetPageId?: number;
+    indexOnly?: boolean;
   }
 ): Promise<{ success: boolean; queueItem: { id: number } }> {
   const token = localStorage.getItem("token");

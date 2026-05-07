@@ -619,7 +619,8 @@ router.post("/sources/bulk/tags", async (req, res) => {
   }).parse(req.body);
 
   if (ids.length === 0 || tags.length === 0) {
-    return res.status(400).json({ error: "Missing ids or tags" });
+    res.status(400).json({ error: "Missing ids or tags" });
+    return;
   }
 
   try {

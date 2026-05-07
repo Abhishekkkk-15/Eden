@@ -274,7 +274,7 @@ export function CloudImportDialog({ open, onOpenChange, targetPageId }: CloudImp
                   <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-xs font-black text-muted-foreground uppercase tracking-widest">
-                        Recent Imports ({queueItems.length})
+                        Recent Imports ({queueItems?.length || 0})
                       </h3>
                     </div>
                     {queueItems?.map((item) => {

@@ -42,10 +42,14 @@ export function PhotoFolderDemo() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
       <PhotoFolder
-        images={sampleImages}
+        items={sampleImages.map((img, i) => ({
+          id: i,
+          title: `Image ${i+1}`,
+          kind: "image",
+          thumbnailUrl: img
+        }))}
         title="Japan Trip"
-        stampIcon={<JapanStamp />}
-        mainIcon={<ToriiGate />}
+        emoji="🇯🇵"
         onClick={() => console.log("Folder clicked!")}
       />
     </div>

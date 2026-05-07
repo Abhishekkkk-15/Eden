@@ -175,16 +175,32 @@ async function processQueueItem(itemId: number) {
     }
     const kind = mimeToKind(mimeType);
 
+    let indexOnlyUrl: string | null = null;
+    if (item.indexOnly) {
+      if (integration.provider === "google_drive") {
+        indexOnlyUrl = `https://drive.google.com/file/d/${item.providerFileId}/view`;
+      } else if (integration.provider === "dropbox") {
+        indexOnlyUrl = `https://www.dropbox.com/home${item.providerFilePath}`;
+      }
+    }
+
+    // Basic text extraction for document/text kinds
+    let content = "";
+    if (mimeType === "text/plain" || mimeType === "text/markdown") {
+      content = fileBuffer.toString("utf-8");
+    }
+
     const [source] = await db
       .insert(sourcesTable)
       .values({
         userId: item.userId,
         title: item.providerFileName,
         kind: kind as any,
-        content: "",
+        content: content,
         mediaMimeType: mimeType,
         mediaSizeBytes: item.fileSize ?? null,
         parentPageId: item.targetPageId ?? null,
+        url: indexOnlyUrl,
         status: "processing", // Start in processing status
       })
       .returning();
@@ -195,25 +211,67 @@ async function processQueueItem(itemId: number) {
 
     // ── Upload to Cloudinary ───────────────────────────────────────────────
     let mediaPath: string | null = null;
-    try {
-      mediaPath = await persistUploadedFile({
-        sourceId: source.id,
-        originalFilename: item.providerFileName,
-        mimeType,
-        buffer: fileBuffer,
-      });
+    if (!item.indexOnly) {
+      try {
+        mediaPath = await persistUploadedFile({
+          sourceId: source.id,
+          originalFilename: item.providerFileName,
+          mimeType,
+          buffer: fileBuffer,
+        });
 
-      // Update the source with the Cloudinary URL
-      await db
-        .update(sourcesTable)
-        .set({ mediaPath, updatedAt: new Date() })
-        .where(eq(sourcesTable.id, source.id));
-    } catch (uploadErr) {
-      console.warn(
-        `[CloudImport] Cloudinary upload failed for item ${itemId}:`,
-        uploadErr
-      );
-      // Continue — the source record is still useful even without media
+        // Update the source with the Cloudinary URL
+        await db
+          .update(sourcesTable)
+          .set({ mediaPath, updatedAt: new Date() })
+          .where(eq(sourcesTable.id, source.id));
+      } catch (uploadErr) {
+        console.warn(
+          `[CloudImport] Cloudinary upload failed for item ${itemId}:`,
+          uploadErr
+        );
+      }
+    }
+
+    // ── Extract Chunks & Embed (For Text/Documents) ─────────────────────────
+    if (content) {
+      try {
+        const { chunkText } = await import("./rag");
+        const { generateEmbedding } = await import("./ai");
+        const { pgvectorEnabled } = await import("./embed-init");
+        const { sourceChunksTable } = await import("@workspace/db");
+        const { sql } = await import("drizzle-orm");
+
+        const chunks = await chunkText(content);
+        if (chunks.length > 0) {
+          await db.insert(sourceChunksTable).values(
+            chunks.map((c, i) => ({
+              sourceId: source.id,
+              position: i,
+              content: c,
+            }))
+          );
+
+          if (pgvectorEnabled) {
+            for (let i = 0; i < chunks.length; i++) {
+              const embedding = await generateEmbedding(chunks[i]!);
+              const vectorStr = `[${embedding.join(",")}]`;
+              await db.execute(sql`
+                UPDATE source_chunks
+                SET embedding = ${vectorStr}::vector
+                WHERE source_id = ${source.id} AND position = ${i}
+              `);
+            }
+          }
+        }
+        
+        await db
+          .update(sourcesTable)
+          .set({ status: "ready", updatedAt: new Date() })
+          .where(eq(sourcesTable.id, source.id));
+      } catch (embedErr) {
+        console.error(`[CloudImport] Embedding failed for source ${source.id}:`, embedErr);
+      }
     }
 
     // ── Mark queue item as completed ───────────────────────────────────────
@@ -233,12 +291,10 @@ async function processQueueItem(itemId: number) {
     // ── Trigger AI Jobs ────────────────────────────────────────────────────
     try {
       if (kind === "audio" || kind === "video") {
-        await queueJob(item.userId, "transcribe", "source", source.id, {});
+        if (!item.indexOnly) await queueJob(item.userId, "transcribe", "source", source.id, {});
       } else if (kind === "image") {
-        await queueJob(item.userId, "analyze_image", "source", source.id, {});
-      } else if (kind === "document") {
-        // For documents, we might need to extract text first if we had a parser
-        // For now, just queue summary which will try to use the content
+        if (!item.indexOnly) await queueJob(item.userId, "analyze_image", "source", source.id, {});
+      } else if (kind === "document" || kind === "text") {
         await queueJob(item.userId, "generate_summary", "source", source.id, {});
       }
       console.log(`[CloudImport] Queued AI jobs for source ${source.id}`);

@@ -40,13 +40,13 @@ console.log(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET);
 router.get("/cloud/google/auth", async (req, res) => {
   const user = getUserFromHeader(req);
   if (!user) {
-    return res
-      .status(401)
-      .json({ error: "Unauthorized: Missing or invalid token" });
+    res.status(401).json({ error: "Unauthorized: Missing or invalid token" });
+    return;
   }
 
   if (!GOOGLE_CLIENT_ID) {
-    return res.status(500).json({ error: "Google Drive not configured" });
+    res.status(500).json({ error: "Google Drive not configured" });
+    return;
   }
 
   const redirectUri = `${API_URL}/api/cloud/google/callback`;
@@ -71,6 +71,7 @@ router.get("/cloud/google/auth", async (req, res) => {
   authUrl.searchParams.set("state", state);
 
   res.json({ authUrl: authUrl.toString() });
+  return;
 });
 
 // GET /cloud/google/callback - OAuth callback
@@ -78,7 +79,8 @@ router.get("/cloud/google/callback", async (req, res) => {
   const { code, state, error } = req.query;
 
   if (error || !code) {
-    return res.redirect(`${APP_URL}/settings/integrations?error=auth_failed`);
+    res.redirect(`${APP_URL}/settings/integrations?error=auth_failed`);
+    return;
   }
 
   try {
@@ -104,29 +106,29 @@ router.get("/cloud/google/callback", async (req, res) => {
 
     if (!tokenResponse.ok) {
       console.error("Google token exchange failed:", tokens);
-      return res.redirect(
+      res.redirect(
         `${APP_URL}/settings/integrations?error=token_exchange_failed`,
       );
+      return;
     }
 
     // Get user info
     const userInfoResponse = await fetch(
       "https://www.googleapis.com/oauth2/v2/userinfo",
       {
-        headers: { Authorization: `Bearer ${tokens.access_token}` },
+        headers: { Authorization: `Bearer ${(tokens as any).access_token}` },
       },
     );
-    const userInfo = await userInfoResponse.json();
+    const userInfo = (await userInfoResponse.json()) as any;
 
     // Store integration
     await db.insert(cloudIntegrationsTable).values({
       userId: stateData.userId,
       provider: "google_drive",
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      tokenExpiresAt:
-        tokens.expires_in ?
-          new Date(Date.now() + tokens.expires_in * 1000)
+      accessToken: (tokens as any).access_token,
+      refreshToken: (tokens as any).refresh_token,
+      tokenExpiresAt: (tokens as any).expires_in ?
+        new Date(Date.now() + (tokens as any).expires_in * 1000)
         : null,
       providerAccountEmail: userInfo.email,
       providerAccountId: userInfo.id,
@@ -135,9 +137,11 @@ router.get("/cloud/google/callback", async (req, res) => {
     });
 
     res.redirect(stateData.redirect + "&status=connected");
+    return;
   } catch (err) {
     console.error("Google OAuth callback error:", err);
     res.redirect(`${APP_URL}/settings/integrations?error=callback_failed`);
+    return;
   }
 });
 
@@ -147,13 +151,13 @@ router.get("/cloud/google/callback", async (req, res) => {
 router.get("/cloud/dropbox/auth", async (req, res) => {
   const user = getUserFromHeader(req);
   if (!user) {
-    return res
-      .status(401)
-      .json({ error: "Unauthorized: Missing or invalid token" });
+    res.status(401).json({ error: "Unauthorized: Missing or invalid token" });
+    return;
   }
 
   if (!DROPBOX_APP_KEY) {
-    return res.status(500).json({ error: "Dropbox not configured" });
+    res.status(500).json({ error: "Dropbox not configured" });
+    return;
   }
 
   const redirectUri = `${API_URL}/api/cloud/dropbox/callback`;
@@ -180,7 +184,8 @@ router.get("/cloud/dropbox/callback", async (req, res) => {
 
   if (error || !code) {
     console.log("[DEBUG] Missing code or error:", { code: !!code, error });
-    return res.redirect(`${APP_URL}/settings/integrations?error=auth_failed`);
+    res.redirect(`${APP_URL}/settings/integrations?error=auth_failed`);
+    return;
   }
 
   try {
@@ -206,13 +211,14 @@ router.get("/cloud/dropbox/callback", async (req, res) => {
       },
     );
 
-    const tokens = await tokenResponse.json();
+    const tokens = (await tokenResponse.json()) as any;
 
     if (!tokenResponse.ok) {
       console.error("Dropbox token exchange failed:", tokens);
-      return res.redirect(
+      res.redirect(
         `${APP_URL}/settings/integrations?error=token_exchange_failed`,
       );
+      return;
     }
 
     // Get account info
@@ -223,7 +229,7 @@ router.get("/cloud/dropbox/callback", async (req, res) => {
         headers: { Authorization: `Bearer ${tokens.access_token}` },
       },
     );
-    const accountInfo = await accountResponse.json();
+    const accountInfo = (await accountResponse.json()) as any;
 
     // Store integration
     await db.insert(cloudIntegrationsTable).values({
@@ -231,9 +237,8 @@ router.get("/cloud/dropbox/callback", async (req, res) => {
       provider: "dropbox",
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
-      tokenExpiresAt:
-        tokens.expires_in ?
-          new Date(Date.now() + tokens.expires_in * 1000)
+      tokenExpiresAt: tokens.expires_in ?
+        new Date(Date.now() + tokens.expires_in * 1000)
         : null,
       providerAccountEmail: accountInfo.email,
       providerAccountId: accountInfo.account_id,
@@ -242,9 +247,11 @@ router.get("/cloud/dropbox/callback", async (req, res) => {
     });
 
     res.redirect(stateData.redirect + "&status=connected");
+    return;
   } catch (err) {
     console.error("Dropbox OAuth callback error:", err);
     res.redirect(`${APP_URL}/settings/integrations?error=callback_failed`);
+    return;
   }
 });
 
@@ -273,9 +280,11 @@ router.get("/cloud/integrations", async (req, res) => {
       .orderBy(desc(cloudIntegrationsTable.createdAt));
 
     res.json(integrations);
+    return;
   } catch (error) {
     console.error("Failed to fetch cloud integrations:", error);
     res.status(500).json({ error: "Failed to fetch integrations" });
+    return;
   }
 });
 
@@ -285,7 +294,8 @@ router.delete("/cloud/integrations/:id", async (req, res) => {
   const integrationId = parseInt(req.params.id);
 
   if (isNaN(integrationId)) {
-    return res.status(400).json({ error: "Invalid integration ID" });
+    res.status(400).json({ error: "Invalid integration ID" });
+    return;
   }
 
   try {
@@ -299,9 +309,11 @@ router.delete("/cloud/integrations/:id", async (req, res) => {
       );
 
     res.json({ success: true });
+    return;
   } catch (error) {
     console.error("Failed to delete integration:", error);
     res.status(500).json({ error: "Failed to delete integration" });
+    return;
   }
 });
 
@@ -311,7 +323,8 @@ router.post("/cloud/integrations/:id/sync", async (req, res) => {
   const integrationId = parseInt(req.params.id);
 
   if (isNaN(integrationId)) {
-    return res.status(400).json({ error: "Invalid integration ID" });
+    res.status(400).json({ error: "Invalid integration ID" });
+    return;
   }
 
   try {
@@ -326,7 +339,8 @@ router.post("/cloud/integrations/:id/sync", async (req, res) => {
       );
 
     if (!integration) {
-      return res.status(404).json({ error: "Integration not found" });
+      res.status(404).json({ error: "Integration not found" });
+      return;
     }
 
     // Update last synced
@@ -336,9 +350,11 @@ router.post("/cloud/integrations/:id/sync", async (req, res) => {
       .where(eq(cloudIntegrationsTable.id, integrationId));
 
     res.json({ success: true, message: "Sync triggered" });
+    return;
   } catch (error) {
     console.error("Failed to sync integration:", error);
     res.status(500).json({ error: "Failed to sync" });
+    return;
   }
 });
 
@@ -357,7 +373,8 @@ router.get("/cloud/integrations/:id/files", async (req, res) => {
   });
 
   if (isNaN(integrationId)) {
-    return res.status(400).json({ error: "Invalid integration ID" });
+    res.status(400).json({ error: "Invalid integration ID" });
+    return;
   }
 
   try {
@@ -374,9 +391,8 @@ router.get("/cloud/integrations/:id/files", async (req, res) => {
 
     if (!integration) {
       console.log("[DEBUG] Integration not found:", integrationId);
-      return res
-        .status(404)
-        .json({ error: "Integration not found or inactive" });
+      res.status(404).json({ error: "Integration not found or inactive" });
+      return;
     }
 
     console.log("[DEBUG] Found integration:", {
@@ -405,12 +421,14 @@ router.get("/cloud/integrations/:id/files", async (req, res) => {
 
     console.log("[DEBUG] Returning files:", { count: files.length });
     res.json({ files, path });
+    return;
   } catch (error) {
     console.error("[DEBUG] Failed to list files:", error);
     res.status(500).json({
       error: "Failed to list files",
       message: (error as Error).message,
     });
+    return;
   }
 });
 
@@ -441,7 +459,7 @@ async function listGoogleDriveFiles(
     throw new Error(`Google Drive API error: ${response.status}`);
   }
 
-  const data = await response.json();
+  const data = await response.json() as any;
 
   return data.files.map((file: any) => ({
     id: file.id,
@@ -523,7 +541,7 @@ async function listDropboxFiles(
       );
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     console.log("[DEBUG] Dropbox response:", {
       entryCount: data.entries?.length || 0,
       hasMore: data.has_more,
@@ -560,6 +578,7 @@ router.post("/cloud/integrations/:id/import", async (req, res) => {
     mimeType: z.string().optional(),
     fileSize: z.number().optional(),
     targetPageId: z.number().optional(),
+    indexOnly: z.boolean().optional(),
   });
 
   let body;
@@ -570,7 +589,8 @@ router.post("/cloud/integrations/:id/import", async (req, res) => {
   }
 
   if (isNaN(integrationId)) {
-    return res.status(400).json({ error: "Invalid integration ID" });
+    res.status(400).json({ error: "Invalid integration ID" });
+    return;
   }
 
   try {
@@ -586,9 +606,8 @@ router.post("/cloud/integrations/:id/import", async (req, res) => {
       );
 
     if (!integration) {
-      return res
-        .status(404)
-        .json({ error: "Integration not found or inactive" });
+      res.status(404).json({ error: "Integration not found or inactive" });
+      return;
     }
 
     // Add to import queue
@@ -603,14 +622,16 @@ router.post("/cloud/integrations/:id/import", async (req, res) => {
         mimeType: body.mimeType,
         fileSize: body.fileSize,
         targetPageId: body.targetPageId,
-        status: "pending",
+        indexOnly: body.indexOnly,
       })
       .returning();
 
-    res.json({ success: true, queueItem });
+    res.status(201).json(queueItem);
+    return;
   } catch (error) {
     console.error("Failed to queue import:", error);
     res.status(500).json({ error: "Failed to queue import" });
+    return;
   }
 });
 
@@ -620,16 +641,25 @@ router.get("/cloud/import-queue", async (req, res) => {
   const { status } = req.query;
 
   try {
-    let query = db
+    const conditions = [eq(cloudImportQueueTable.userId, user.id)];
+    if (status) {
+      conditions.push(eq(cloudImportQueueTable.status, status as string));
+    }
+
+    const items = await db
       .select({
         id: cloudImportQueueTable.id,
         integrationId: cloudImportQueueTable.integrationId,
         provider: cloudIntegrationsTable.provider,
-        providerFileName: cloudImportQueueTable.providerFileName,
-        providerFilePath: cloudImportQueueTable.providerFilePath,
-        status: cloudImportQueueTable.status,
-        errorMessage: cloudImportQueueTable.errorMessage,
+        providerAccountEmail: cloudIntegrationsTable.providerAccountEmail,
+        fileId: cloudImportQueueTable.providerFileId,
+        fileName: cloudImportQueueTable.providerFileName,
+        filePath: cloudImportQueueTable.providerFilePath,
+        mimeType: cloudImportQueueTable.mimeType,
         sourceId: cloudImportQueueTable.sourceId,
+        status: cloudImportQueueTable.status,
+        error: cloudImportQueueTable.errorMessage,
+        indexOnly: cloudImportQueueTable.indexOnly,
         createdAt: cloudImportQueueTable.createdAt,
         updatedAt: cloudImportQueueTable.updatedAt,
       })
@@ -638,15 +668,9 @@ router.get("/cloud/import-queue", async (req, res) => {
         cloudIntegrationsTable,
         eq(cloudImportQueueTable.integrationId, cloudIntegrationsTable.id),
       )
-      .where(eq(cloudImportQueueTable.userId, user.id))
+      .where(and(...conditions))
       .orderBy(desc(cloudImportQueueTable.createdAt))
       .limit(50);
-
-    if (status) {
-      query = query.where(eq(cloudImportQueueTable.status, status as string));
-    }
-
-    const items = await query;
     res.json(items);
   } catch (error) {
     console.error("Failed to fetch import queue:", error);
@@ -714,15 +738,17 @@ router.post("/cloud/integrations/:id/folders", async (req, res) => {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json() as any;
       throw new Error(error.error?.message || "Failed to create folder");
     }
 
-    const folder = await response.json();
+    const folder = await response.json() as any;
     res.json({ id: folder.id, name: body.name, type: "folder" });
+    return;
   } catch (error) {
     console.error("Failed to create folder:", error);
     res.status(500).json({ error: "Failed to create folder" });
+    return;
   }
 });
 
@@ -742,11 +768,13 @@ router.patch("/cloud/integrations/:id/files/:fileId", async (req, res) => {
   try {
     body = schema.parse(req.body);
   } catch (error) {
-    return res.status(400).json({ error: "Invalid request body" });
+    res.status(400).json({ error: "Invalid request body" });
+    return;
   }
 
   if (isNaN(integrationId)) {
-    return res.status(400).json({ error: "Invalid integration ID" });
+    res.status(400).json({ error: "Invalid integration ID" });
+    return;
   }
 
   try {
@@ -762,13 +790,13 @@ router.patch("/cloud/integrations/:id/files/:fileId", async (req, res) => {
       );
 
     if (!integration) {
-      return res.status(404).json({ error: "Integration not found" });
+      res.status(404).json({ error: "Integration not found" });
+      return;
     }
 
     if (integration.provider !== "google_drive") {
-      return res
-        .status(400)
-        .json({ error: "Only Google Drive supports this operation" });
+      res.status(400).json({ error: "Only Google Drive supports this operation" });
+      return;
     }
 
     const updates: any = {};
@@ -793,11 +821,11 @@ router.patch("/cloud/integrations/:id/files/:fileId", async (req, res) => {
     );
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json() as any;
       throw new Error(error.error?.message || "Failed to update file");
     }
 
-    const file = await response.json();
+    const file = await response.json() as any;
     res.json({
       id: file.id,
       name: file.name,
@@ -806,9 +834,11 @@ router.patch("/cloud/integrations/:id/files/:fileId", async (req, res) => {
           "folder"
         : "file",
     });
+    return;
   } catch (error) {
     console.error("Failed to update file:", error);
     res.status(500).json({ error: "Failed to update file" });
+    return;
   }
 });
 
@@ -819,7 +849,8 @@ router.delete("/cloud/integrations/:id/files/:fileId", async (req, res) => {
   const fileId = req.params.fileId;
 
   if (isNaN(integrationId)) {
-    return res.status(400).json({ error: "Invalid integration ID" });
+    res.status(400).json({ error: "Invalid integration ID" });
+    return;
   }
 
   try {
@@ -835,13 +866,13 @@ router.delete("/cloud/integrations/:id/files/:fileId", async (req, res) => {
       );
 
     if (!integration) {
-      return res.status(404).json({ error: "Integration not found" });
+      res.status(404).json({ error: "Integration not found" });
+      return;
     }
 
     if (integration.provider !== "google_drive") {
-      return res
-        .status(400)
-        .json({ error: "Only Google Drive supports this operation" });
+      res.status(400).json({ error: "Only Google Drive supports this operation" });
+      return;
     }
 
     const response = await fetch(
@@ -853,14 +884,16 @@ router.delete("/cloud/integrations/:id/files/:fileId", async (req, res) => {
     );
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json() as any;
       throw new Error(error.error?.message || "Failed to delete file");
     }
 
     res.json({ success: true });
+    return;
   } catch (error) {
     console.error("Failed to delete file:", error);
     res.status(500).json({ error: "Failed to delete file" });
+    return;
   }
 });
 
@@ -873,7 +906,8 @@ router.get(
     const fileId = req.params.fileId;
 
     if (isNaN(integrationId)) {
-      return res.status(400).json({ error: "Invalid integration ID" });
+      res.status(400).json({ error: "Invalid integration ID" });
+      return;
     }
 
     try {
@@ -889,13 +923,13 @@ router.get(
         );
 
       if (!integration) {
-        return res.status(404).json({ error: "Integration not found" });
+        res.status(404).json({ error: "Integration not found" });
+        return;
       }
 
       if (integration.provider !== "google_drive") {
-        return res
-          .status(400)
-          .json({ error: "Only Google Drive supports this operation" });
+        res.status(400).json({ error: "Only Google Drive supports this operation" });
+        return;
       }
 
       // Get file metadata first
@@ -908,7 +942,7 @@ router.get(
         throw new Error("Failed to get file metadata");
       }
 
-      const metadata = await metaResponse.json();
+      const metadata = await metaResponse.json() as any;
 
       // For Google Docs/Sheets/etc, export as PDF or text
       let downloadUrl: string;
@@ -942,9 +976,11 @@ router.get(
 
       const arrayBuffer = await response.arrayBuffer();
       res.send(Buffer.from(arrayBuffer));
+      return;
     } catch (error) {
       console.error("Failed to download file:", error);
       res.status(500).json({ error: "Failed to download file" });
+      return;
     }
   },
 );
@@ -955,7 +991,8 @@ router.post("/cloud/integrations/:id/upload", async (req, res) => {
   const integrationId = parseInt(req.params.id);
 
   if (isNaN(integrationId)) {
-    return res.status(400).json({ error: "Invalid integration ID" });
+    res.status(400).json({ error: "Invalid integration ID" });
+    return;
   }
 
   try {
@@ -971,13 +1008,13 @@ router.post("/cloud/integrations/:id/upload", async (req, res) => {
       );
 
     if (!integration) {
-      return res.status(404).json({ error: "Integration not found" });
+      res.status(404).json({ error: "Integration not found" });
+      return;
     }
 
     if (integration.provider !== "google_drive") {
-      return res
-        .status(400)
-        .json({ error: "Only Google Drive supports this operation" });
+      res.status(400).json({ error: "Only Google Drive supports this operation" });
+      return;
     }
 
     // For multipart upload, we'd need to handle the request body differently
@@ -985,7 +1022,8 @@ router.post("/cloud/integrations/:id/upload", async (req, res) => {
     const { name, parentId, mimeType } = req.query;
 
     if (!name) {
-      return res.status(400).json({ error: "File name is required" });
+      res.status(400).json({ error: "File name is required" });
+      return;
     }
 
     // Create file metadata
@@ -1026,15 +1064,17 @@ router.post("/cloud/integrations/:id/upload", async (req, res) => {
     );
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json() as any;
       throw new Error(error.error?.message || "Failed to upload file");
     }
 
-    const file = await response.json();
+    const file = await response.json() as any;
     res.json({ id: file.id, name: file.name, type: "file" });
+    return;
   } catch (error) {
     console.error("Failed to upload file:", error);
     res.status(500).json({ error: "Failed to upload file" });
+    return;
   }
 });
 
@@ -1061,11 +1101,13 @@ router.post(
     try {
       body = schema.parse(req.body);
     } catch (error) {
-      return res.status(400).json({ error: "Invalid request body" });
+      res.status(400).json({ error: "Invalid request body" });
+      return;
     }
 
     if (isNaN(integrationId)) {
-      return res.status(400).json({ error: "Invalid integration ID" });
+      res.status(400).json({ error: "Invalid integration ID" });
+      return;
     }
 
     try {
@@ -1081,7 +1123,8 @@ router.post(
         );
 
       if (!integration) {
-        return res.status(404).json({ error: "Integration not found" });
+        res.status(404).json({ error: "Integration not found" });
+        return;
       }
 
       let fileName = "file";
@@ -1095,7 +1138,7 @@ router.post(
         );
         if (!metaResponse.ok)
           throw new Error("Failed to get Google Drive metadata");
-        const metadata = await metaResponse.json();
+        const metadata = await metaResponse.json() as any;
         fileName = metadata.name;
         mimeType = metadata.mimeType;
 
@@ -1159,7 +1202,7 @@ router.post(
           },
         );
         if (!metaResponse.ok) throw new Error("Failed to get Dropbox metadata");
-        const metadata = await metaResponse.json();
+        const metadata = await metaResponse.json() as any;
         fileName = metadata.name;
 
         // Download content with safe header encoding
@@ -1183,9 +1226,8 @@ router.post(
           throw new Error("Failed to download Dropbox content");
         content = await contentResponse.text();
       } else {
-        return res
-          .status(400)
-          .json({ error: "Unsupported provider for direct analysis" });
+        res.status(400).json({ error: "Unsupported provider for direct analysis" });
+        return;
       }
 
       // Clean up content (remove non-printable characters if it's a binary file)
@@ -1239,7 +1281,7 @@ router.post(
         throw new Error("AI analysis failed");
       }
 
-      const aiResult = await aiResponse.json();
+      const aiResult = await aiResponse.json() as any;
       const analysis =
         aiResult.choices?.[0]?.message?.content || "No analysis available";
 
@@ -1249,9 +1291,11 @@ router.post(
         analysis,
         contentLength: content.length,
       });
+      return;
     } catch (error) {
       console.error("Failed to analyze file:", error);
       res.status(500).json({ error: "Failed to analyze file" });
+      return;
     }
   },
 );
@@ -1272,11 +1316,13 @@ router.post("/cloud/integrations/:id/ai-create-document", async (req, res) => {
   try {
     body = schema.parse(req.body);
   } catch (error) {
-    return res.status(400).json({ error: "Invalid request body" });
+    res.status(400).json({ error: "Invalid request body" });
+    return;
   }
 
   if (isNaN(integrationId)) {
-    return res.status(400).json({ error: "Invalid integration ID" });
+    res.status(400).json({ error: "Invalid integration ID" });
+    return;
   }
 
   try {
@@ -1292,13 +1338,13 @@ router.post("/cloud/integrations/:id/ai-create-document", async (req, res) => {
       );
 
     if (!integration) {
-      return res.status(404).json({ error: "Integration not found" });
+      res.status(404).json({ error: "Integration not found" });
+      return;
     }
 
     if (integration.provider !== "google_drive") {
-      return res
-        .status(400)
-        .json({ error: "Only Google Drive supports this operation" });
+      res.status(400).json({ error: "Only Google Drive supports this operation" });
+      return;
     }
 
     // Generate content with AI
@@ -1328,7 +1374,7 @@ router.post("/cloud/integrations/:id/ai-create-document", async (req, res) => {
       throw new Error("AI content generation failed");
     }
 
-    const aiResult = await aiResponse.json();
+    const aiResult = await aiResponse.json() as any;
     const content = aiResult.choices?.[0]?.message?.content || "";
 
     // Create Google Doc with the content
@@ -1353,7 +1399,7 @@ router.post("/cloud/integrations/:id/ai-create-document", async (req, res) => {
       throw new Error("Failed to create Google Doc");
     }
 
-    const doc = await createResponse.json();
+    const doc = await createResponse.json() as any;
 
     // Note: To actually insert content, we'd need to use the Docs API
     // For now, return the created doc info and content separately
@@ -1365,9 +1411,11 @@ router.post("/cloud/integrations/:id/ai-create-document", async (req, res) => {
       message:
         "Document created. Content is ready to be copied into the document.",
     });
+    return;
   } catch (error) {
     console.error("Failed to create AI document:", error);
     res.status(500).json({ error: "Failed to create document" });
+    return;
   }
 });
 
@@ -1379,7 +1427,8 @@ router.get("/cloud/integrations/:id/ai-tools", async (req, res) => {
   const integrationId = parseInt(req.params.id);
 
   if (isNaN(integrationId)) {
-    return res.status(400).json({ error: "Invalid integration ID" });
+    res.status(400).json({ error: "Invalid integration ID" });
+    return;
   }
 
   try {
@@ -1395,7 +1444,8 @@ router.get("/cloud/integrations/:id/ai-tools", async (req, res) => {
       );
 
     if (!integration) {
-      return res.status(404).json({ error: "Integration not found" });
+      res.status(404).json({ error: "Integration not found" });
+      return;
     }
 
     const tools = [
@@ -1468,12 +1518,13 @@ router.get("/cloud/integrations/:id/ai-tools", async (req, res) => {
   } catch (error) {
     console.error("Failed to fetch AI tools:", error);
     res.status(500).json({ error: "Failed to fetch tools" });
+    return;
   }
 });
 
 // Helper to perform export (recursively if it's a page/folder)
 async function performExport(
-  userId: number,
+  userId: string,
   integration: any,
   sourceId: number,
   isPage: boolean,
@@ -1552,7 +1603,7 @@ async function performExport(
           const err = await response.text();
           throw new Error(`Google Drive folder creation failed: ${err}`);
         }
-        const result = await response.json();
+        const result = await response.json() as any;
         providerFileId = result.id;
       } else {
         console.log(
@@ -1586,7 +1637,7 @@ async function performExport(
           const err = await response.text();
           throw new Error(`Google Drive upload failed: ${err}`);
         }
-        const result = await response.json();
+        const result = await response.json() as any;
         providerFileId = result.id;
       }
     } else if (integration.provider === "dropbox") {
@@ -1612,7 +1663,7 @@ async function performExport(
           throw new Error(
             `Dropbox folder creation failed: ${await response.text()}`,
           );
-        const result = await response.json();
+        const result = await response.json() as any;
         providerFileId = result.metadata.path_display;
       } else {
         console.log(`[Export] Uploading file to Dropbox: ${path}`);
@@ -1634,7 +1685,7 @@ async function performExport(
         );
         if (!response.ok)
           throw new Error(`Dropbox upload failed: ${await response.text()}`);
-        const result = await response.json();
+        const result = await response.json() as any;
         providerFileId = result.path_display;
       }
     }
@@ -1707,7 +1758,8 @@ router.post("/cloud/integrations/:id/export", async (req, res) => {
   try {
     body = schema.parse(req.body);
   } catch (error) {
-    return res.status(400).json({ error: "Invalid request body" });
+    res.status(400).json({ error: "Invalid request body" });
+    return;
   }
 
   try {
@@ -1723,9 +1775,8 @@ router.post("/cloud/integrations/:id/export", async (req, res) => {
       );
 
     if (!integration) {
-      return res
-        .status(404)
-        .json({ error: "Integration not found or inactive" });
+      res.status(404).json({ error: "Integration not found or inactive" });
+      return;
     }
 
     const result = await performExport(
@@ -1736,12 +1787,14 @@ router.post("/cloud/integrations/:id/export", async (req, res) => {
       body.targetFolderId,
     );
     res.json(result);
+    return;
   } catch (error) {
     console.error("Export to cloud failed:", error);
     res.status(500).json({
       error:
         error instanceof Error ? error.message : "Failed to export to cloud",
     });
+    return;
   }
 });
 

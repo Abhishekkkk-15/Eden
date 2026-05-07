@@ -1,6 +1,6 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, readdir, readFile, unlink } from "node:fs/promises";
+import { mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -42,7 +42,7 @@ export async function extractVideoFrames(
     await mkdir(tempDir, { recursive: true });
 
     // Write video to temp file
-    await Bun.write(videoPath, videoBuffer);
+    await writeFile(videoPath, videoBuffer);
 
     // Get video duration using ffprobe
     const { stdout: durationStr } = await execAsync(

@@ -40,6 +40,7 @@ export const cloudImportQueueTable = pgTable("cloud_import_queue", {
   providerFilePath: text("provider_file_path"),
   mimeType: text("mime_type"),
   fileSize: integer("file_size"),
+  indexOnly: boolean("index_only").notNull().default(false),
   
   // Import status
   status: text("status").notNull().default("pending"), // 'pending', 'downloading', 'processing', 'completed', 'failed'

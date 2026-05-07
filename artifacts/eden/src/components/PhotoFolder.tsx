@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { motion, PanInfo } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
   Folder,
@@ -49,7 +49,7 @@ interface PhotoFolderProps {
   isDropTarget?: boolean;
   draggable?: boolean;
   onDragStart?: (e: React.DragEvent) => void;
-  onDragEnd?: () => void;
+  onDragEnd?: (e: React.DragEvent) => void;
   onDragOver?: (e: React.DragEvent) => void;
   onDragLeave?: () => void;
   onDrop?: (e: React.DragEvent) => void;
@@ -140,8 +140,8 @@ export function PhotoFolder({
         className
       )}
       draggable={draggable}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
+      onDragStart={onDragStart as any}
+      onDragEnd={onDragEnd as any}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}

@@ -110,6 +110,7 @@ function FileContextMenu({
   onDownload,
   onAnalyze,
   onImport,
+  onIndexOnly,
   onAICreate,
 }: {
   file: CloudFile;
@@ -119,6 +120,7 @@ function FileContextMenu({
   onDownload: () => void;
   onAnalyze: () => void;
   onImport: () => void;
+  onIndexOnly: () => void;
   onAICreate?: () => void;
 }) {
   return (
@@ -133,7 +135,11 @@ function FileContextMenu({
           <>
             <DropdownMenuItem onClick={onImport} className="rounded-lg">
               <FolderInput className="mr-2 h-4 w-4" />
-              Import to Eden
+              Full Import to Eden
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onIndexOnly} className="rounded-lg">
+              <Search className="mr-2 h-4 w-4 text-blue-500" />
+              Index Only (Semantic Search)
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onDownload} className="rounded-lg">
               <Download className="mr-2 h-4 w-4" />
@@ -644,7 +650,7 @@ export function CloudFileBrowser({
     setCurrentPath(newPath);
   };
 
-  const handleImport = async (file: CloudFile) => {
+  const handleImport = async (file: CloudFile, indexOnly: boolean = false) => {
     if (file.type === "folder") return;
     
     setImportingFile(file.id);
@@ -658,12 +664,13 @@ export function CloudFileBrowser({
           mimeType: file.mimeType,
           fileSize: file.size,
           targetPageId,
+          indexOnly,
         },
       });
-      toast.success(`Importing "${file.name}" to Eden...`);
+      toast.success(indexOnly ? `Indexing "${file.name}" for semantic search...` : `Importing "${file.name}" to Eden...`);
       onImport?.();
     } catch {
-      toast.error(`Failed to import "${file.name}"`);
+      toast.error(`Failed to ${indexOnly ? 'index' : 'import'} "${file.name}"`);
     } finally {
       setImportingFile(null);
     }
@@ -914,7 +921,8 @@ export function CloudFileBrowser({
                           onDelete={() => handleDelete(file)}
                           onDownload={() => handleDownload(file)}
                           onAnalyze={() => openAIAnalysis(file)}
-                          onImport={() => handleImport(file)}
+                          onImport={() => handleImport(file, false)}
+                          onIndexOnly={() => handleImport(file, true)}
                           onAICreate={() => setIsAICreateOpen(true)}
                         />
                       </div>
