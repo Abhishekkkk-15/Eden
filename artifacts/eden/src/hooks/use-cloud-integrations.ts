@@ -247,6 +247,30 @@ export function useSetupNotionDatabase() {
   });
 }
 
+export function useUpdateCloudIntegrationSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, syncSettings }: { id: number; syncSettings: any }) => {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/cloud/integrations/${id}/settings`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ syncSettings }),
+      });
+      if (!res.ok) {
+        throw new Error("Failed to update settings");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cloud-integrations"] });
+    },
+  });
+}
+
 export function useDeleteCloudIntegration() {
   const queryClient = useQueryClient();
   return useMutation({

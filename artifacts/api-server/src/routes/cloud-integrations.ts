@@ -484,6 +484,44 @@ router.post("/cloud/integrations/:id/notion/setup", async (req, res) => {
   }
 });
 
+// PATCH /cloud/integrations/:id/settings - Update integration settings
+router.patch("/cloud/integrations/:id/settings", async (req, res) => {
+  const user = (req as any).user;
+  const integrationId = parseInt(req.params.id);
+  const { syncSettings } = req.body;
+
+  try {
+    const [integration] = await db
+      .select()
+      .from(cloudIntegrationsTable)
+      .where(
+        and(
+          eq(cloudIntegrationsTable.id, integrationId),
+          eq(cloudIntegrationsTable.userId, user.id)
+        )
+      );
+
+    if (!integration) {
+      res.status(404).json({ error: "Integration not found" });
+      return;
+    }
+
+    await db.update(cloudIntegrationsTable)
+      .set({
+        syncSettings: {
+          ...(integration.syncSettings as any),
+          ...syncSettings
+        },
+        updatedAt: new Date()
+      })
+      .where(eq(cloudIntegrationsTable.id, integrationId));
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update settings" });
+  }
+});
+
 // PATCH /cloud/integrations/:id - Update integration settings
 router.patch("/cloud/integrations/:id", async (req, res) => {
   const user = (req as any).user;

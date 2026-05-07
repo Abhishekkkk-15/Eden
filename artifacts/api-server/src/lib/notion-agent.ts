@@ -158,6 +158,134 @@ async function processNotionResearch(integration: any) {
   }
 }
 
+export async function generateMeetingMinutes(userId: string, sourceTitle: string, transcription: string) {
+  console.log(`[NotionAgent] Incoming Meeting Minutes request: User=${userId}, Source="${sourceTitle}", TranscriptionLength=${transcription.length}`);
+  try {
+    // 1. Get active Notion integration
+    const [integration] = await db
+      .select()
+      .from(cloudIntegrationsTable)
+      .where(
+        and(
+          eq(cloudIntegrationsTable.userId, userId),
+          eq(cloudIntegrationsTable.provider, "notion"),
+          eq(cloudIntegrationsTable.isActive, true)
+        )
+      )
+      .limit(1);
+
+    if (!integration) {
+      console.log(`[NotionAgent] No active Notion integration for user ${userId}, skipping meeting minutes.`);
+      return;
+    }
+
+    const syncSettings = integration.syncSettings as any;
+    if (!syncSettings?.autoSyncMeetingMinutes) {
+      console.log(`[NotionAgent] Auto-minutes disabled for user ${userId}, skipping.`);
+      return;
+    }
+
+    const accessToken = integration.accessToken;
+
+    // 2. Generate Summary using AI
+    console.log(`[NotionAgent] Generating meeting minutes for: ${sourceTitle}`);
+    const minutes = await completeText({
+      system: "You are a professional secretary. Summarize the following meeting transcript into clear minutes including: 1. Overview, 2. Key Discussion Points, 3. Action Items. Format in clean Markdown.",
+      user: `Transcript of "${sourceTitle}":\n\n${transcription.slice(0, 30000)}`
+    });
+
+    // 3. Find or Create "Meeting Notes" database
+    console.log(`[NotionAgent] Searching for "Meeting Notes" database...`);
+    const searchRes = await fetch("https://api.notion.com/v1/search", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query: "Meeting Notes",
+        filter: { property: "object", value: "database" }
+      }),
+    });
+
+    const searchResult = await searchRes.json();
+    let dbInfo = searchResult.results?.[0];
+
+    if (!dbInfo) {
+      console.log(`[NotionAgent] "Meeting Notes" database not found. Attempting to find a parent page...`);
+      // Create it if not found (find a parent page first)
+      const pageSearch = await fetch("https://api.notion.com/v1/search", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Notion-Version": "2022-06-28",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ filter: { property: "object", value: "page" }, page_size: 1 }),
+      });
+      const pageSearchResult = await pageSearch.json();
+      const parentPage = pageSearchResult.results?.[0];
+
+      if (parentPage) {
+        console.log(`[NotionAgent] Found parent page: ${parentPage.id}. Creating database...`);
+        const createRes = await fetch("https://api.notion.com/v1/databases", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Notion-Version": "2022-06-28",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            parent: { type: "page_id", page_id: parentPage.id },
+            title: [{ type: "text", text: { content: "Meeting Notes" } }],
+            properties: {
+              Name: { title: {} },
+              Date: { date: {} },
+              "Source File": { url: {} }
+            }
+          }),
+        });
+        dbInfo = await createRes.json();
+      } else {
+        console.warn(`[NotionAgent] No parent page found. Please share a page with Eden.`);
+      }
+    }
+
+    if (!dbInfo) throw new Error("Could not find or create a Notion database for meeting notes.");
+
+    // 4. Create the Page in Notion
+    await fetch("https://api.notion.com/v1/pages", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        parent: { database_id: dbInfo.id },
+        properties: {
+          Name: { title: [{ text: { content: `Minutes: ${sourceTitle}` } }] },
+          Date: { date: { start: new Date().toISOString().split("T")[0] } }
+        },
+        children: [
+          {
+            object: "block",
+            type: "paragraph",
+            paragraph: {
+              rich_text: [{ type: "text", text: { content: minutes.slice(0, 2000) } }]
+            }
+          }
+        ]
+      }),
+    });
+
+    console.log(`[NotionAgent] ✓ Meeting minutes synced to Notion for "${sourceTitle}"`);
+  } catch (err) {
+    console.error("[NotionAgent] Failed to automate meeting minutes:", err);
+  }
+}
+
 async function pollNotion() {
   console.log(`[NotionAgent] Heartbeat: Checking for research tasks at ${new Date().toLocaleTimeString()}`);
   try {

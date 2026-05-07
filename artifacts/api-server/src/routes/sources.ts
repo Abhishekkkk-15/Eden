@@ -23,6 +23,7 @@ import {
   removeUploadedFile,
 } from "../lib/source-media";
 import { transcribeSource } from "../lib/transcription";
+import { generateMeetingMinutes } from "../lib/notion-agent";
 import { triggerWorkflows } from "./workflows";
 import { NodeHtmlMarkdown } from "node-html-markdown";
 
@@ -264,8 +265,13 @@ router.post("/sources", async (req, res) => {
       if (["audio", "image"].includes(body.kind)) {
         void (async () => {
           try {
-            await transcribeSource(pending.id, body.kind, mediaPath);
+            const transcription = await transcribeSource(pending.id, body.kind, mediaPath);
             req.log.info({ sourceId: pending.id, kind: body.kind }, "transcription completed");
+            
+            // Trigger meeting minutes for audio uploads
+            if (body.kind === "audio") {
+              void generateMeetingMinutes(user.id, pending.title, transcription);
+            }
           } catch (txErr) {
             req.log.warn({ err: txErr, sourceId: pending.id }, "transcription failed (non-critical)");
           }
@@ -296,6 +302,11 @@ router.post("/sources", async (req, res) => {
           originalFilename: body.originalFilename,
         });
         content = extracted.content;
+        
+        // Trigger meeting minutes for video uploads
+        if (content) {
+          void generateMeetingMinutes(user.id, pending.title, content);
+        }
       }
 
       const chunks = await chunkText(content);

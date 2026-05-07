@@ -8,9 +8,12 @@ import {
   useSyncCloudIntegration,
   useConnectNotion,
   useSetupNotionDatabase,
+  useUpdateCloudIntegrationSettings,
 } from "@/hooks/use-cloud-integrations";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
@@ -84,6 +87,7 @@ export default function IntegrationsSettings() {
   const deleteIntegration = useDeleteCloudIntegration();
   const syncIntegration = useSyncCloudIntegration();
   const setupNotion = useSetupNotionDatabase();
+  const updateSettings = useUpdateCloudIntegrationSettings();
 
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
 
@@ -325,8 +329,29 @@ export default function IntegrationsSettings() {
                           {new Date(integration.lastSyncedAt).toLocaleDateString()}
                         </span>
                       )}
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-4">
                         {integration.provider === "notion" && (
+                          <div className="flex items-center space-x-2 mr-2 border-r pr-4 border-muted">
+                            <Switch
+                              id={`minutes-toggle-${integration.id}`}
+                              checked={(integration.syncSettings as any)?.autoSyncMeetingMinutes === true}
+                              onCheckedChange={(checked) => {
+                                updateSettings.mutate({
+                                  id: integration.id,
+                                  syncSettings: { autoSyncMeetingMinutes: checked }
+                                });
+                              }}
+                            />
+                            <Label 
+                              htmlFor={`minutes-toggle-${integration.id}`}
+                              className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider"
+                            >
+                              Auto-Minutes
+                            </Label>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1">
+                          {integration.provider === "notion" && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -368,8 +393,9 @@ export default function IntegrationsSettings() {
                     </div>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            );
+          })}
           </div>
         )}
       </section>

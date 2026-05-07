@@ -2,6 +2,7 @@ import { db, jobQueueTable, sourcesTable, transcriptionsTable, sourceChunksTable
 import { eq, and, asc, lte } from "drizzle-orm";
 import { summarize, completeText, extractEntities } from "./ai";
 import { transcribeSource, transcribeImage, transcribeVideoFrames } from "./transcription";
+import { generateMeetingMinutes } from "./notion-agent";
 
 // Job processor configuration
 const JOB_POLL_INTERVAL = 5000; // Check for jobs every 5 seconds
@@ -89,7 +90,7 @@ async function processJob(jobId: number) {
       return;
     }
 
-    console.log(`[JobQueue] Processing job ${jobId} (${job.jobType})`);
+    console.log(`[JobQueue] >>> Starting job: ID=${jobId}, Type=${job.jobType}, Entity=${job.entityType}:${job.entityId}`);
 
     let result: unknown;
     let error: string | null = null;
@@ -209,6 +210,12 @@ async function processTranscriptionJob(job: typeof jobQueueTable.$inferSelect) {
   }
 
   await updateJobProgress(job.id, 100, "Complete");
+
+  // Post-processing: Generate meeting minutes if user has Notion connected
+  if (source.kind === "audio" || source.kind === "video") {
+    console.log(`[JobQueue] Triggering Meeting Minutes automation for ${source.title} (User: ${job.userId})`);
+    void generateMeetingMinutes(job.userId, source.title, transcription);
+  }
 
   return { transcriptionLength: transcription.length };
 }

@@ -27,9 +27,15 @@ function getMimeFromExtension(filename: string): string | null {
     case "mp4": return "video/mp4";
     case "webm": return "video/webm";
     case "mov": return "video/quicktime";
+    case "avi": return "video/x-msvideo";
+    case "mkv": return "video/x-matroska";
+    case "wmv": return "video/x-ms-wmv";
+    case "flv": return "video/x-flv";
     case "mp3": return "audio/mpeg";
     case "wav": return "audio/wav";
     case "m4a": return "audio/mp4";
+    case "ogg": return "audio/ogg";
+    case "aac": return "audio/aac";
     case "pdf": return "application/pdf";
     case "txt": return "text/plain";
     case "md": return "text/markdown";
@@ -183,9 +189,7 @@ async function processQueueItem(itemId: number) {
       return;
     }
 
-    console.log(
-      `[CloudImport] Processing item ${itemId} — ${item.providerFileName}`
-    );
+    console.log(`[CloudImport] Processing item ${itemId}: ${item.providerFileName} (Mime: ${item.mimeType})`);
 
     // Load the integration (access token, provider)
     const [integration] = await db
@@ -208,6 +212,7 @@ async function processQueueItem(itemId: number) {
 
     if (integration.provider === "dropbox") {
       fileBuffer = await downloadFromDropbox(integration.accessToken, filePath);
+    } else if (integration.provider === "google_drive") {
       fileBuffer = await downloadFromGoogleDrive(
         integration.accessToken,
         item.providerFileId,
@@ -360,17 +365,23 @@ async function processQueueItem(itemId: number) {
     try {
       if (kind === "audio" || kind === "video") {
         if (!item.indexOnly) {
+          console.log(`[CloudImport] Queuing transcribe job for ${source.id} (${kind})`);
           await queueJob(item.userId, "transcribe", "source", source.id, {});
           if (kind === "video") {
+            console.log(`[CloudImport] Queuing analyze_video job for ${source.id}`);
             await queueJob(item.userId, "analyze_video", "source", source.id, {});
           }
         }
       } else if (kind === "image") {
-        if (!item.indexOnly) await queueJob(item.userId, "analyze_image", "source", source.id, {});
+        if (!item.indexOnly) {
+          console.log(`[CloudImport] Queuing analyze_image job for ${source.id}`);
+          await queueJob(item.userId, "analyze_image", "source", source.id, {});
+        }
       } else if (kind === "document" || kind === "text") {
+        console.log(`[CloudImport] Queuing generate_summary job for ${source.id}`);
         await queueJob(item.userId, "generate_summary", "source", source.id, {});
       }
-      console.log(`[CloudImport] Queued AI jobs for source ${source.id}`);
+      console.log(`[CloudImport] ✓ All AI jobs queued for source ${source.id}`);
     } catch (jobErr) {
       console.error(`[CloudImport] Failed to queue jobs for source ${source.id}:`, jobErr);
     }
