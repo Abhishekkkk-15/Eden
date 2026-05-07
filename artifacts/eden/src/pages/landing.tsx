@@ -5,9 +5,9 @@ import { Sparkles, ChevronRight, Zap, Shield, Brain } from "lucide-react";
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-50 selection:bg-primary/30 overflow-x-hidden">
+    <div className="min-h-screen bg-background text-foreground selection:bg-primary/30 overflow-x-hidden">
       {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-[#020617]/80 backdrop-blur-xl">
+      <nav className="fixed top-0 w-full z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center">
@@ -17,10 +17,10 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center gap-4">
             <Link href="/login">
-              <Button variant="ghost" className="text-slate-400 hover:text-white">Log in</Button>
+              <Button variant="ghost" className="text-muted-foreground hover:text-foreground">Log in</Button>
             </Link>
             <Link href="/signup">
-              <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6">
+              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6">
                 Get Started
               </Button>
             </Link>
@@ -42,7 +42,7 @@ export default function LandingPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/5 text-xs font-medium text-primary mb-6">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-border bg-muted/50 text-xs font-medium text-primary mb-6">
               <Zap className="w-3 h-3 fill-primary" />
               <span>Introducing Eden Co-Pilot</span>
             </span>
@@ -52,7 +52,7 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-5xl md:text-7xl font-bold tracking-tight mb-8 bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60"
+            className="text-5xl md:text-7xl font-bold tracking-tight mb-8 bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/60"
           >
             Your Second Mind,<br />
             <span className="text-primary italic">Powered by AI.</span>
@@ -62,7 +62,7 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed"
+            className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed"
           >
             The ultimate workspace for thinkers, writers, and creators. 
             Organize your notes, ingest your sources, and let AI help you connect the dots.
@@ -75,7 +75,7 @@ export default function LandingPage() {
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
             <Link href="/signup">
-              <Button size="lg" className="h-14 px-8 text-lg rounded-full bg-primary hover:bg-primary/90 text-white group shadow-[0_0_20px_rgba(var(--primary),0.3)]">
+              <Button size="lg" className="h-14 px-8 text-lg rounded-full bg-primary hover:bg-primary/90 text-primary-foreground group shadow-[0_0_20px_rgba(var(--primary),0.3)]">
                 Start building your Eden
                 <ChevronRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
@@ -90,7 +90,7 @@ export default function LandingPage() {
             className="mt-20 relative mx-auto max-w-5xl group"
           >
             <div className="absolute -inset-1 bg-gradient-to-r from-primary to-purple-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000" />
-            <div className="relative rounded-xl border border-white/10 bg-slate-900/50 backdrop-blur shadow-2xl overflow-hidden aspect-[16/9]">
+            <div className="relative rounded-xl border border-border bg-card/50 backdrop-blur shadow-2xl overflow-hidden aspect-[16/9]">
               <img 
                 src="/eden_hero_mockup_1778091794881.png" 
                 alt="Eden Workspace" 
@@ -102,7 +102,7 @@ export default function LandingPage() {
       </section>
 
       {/* Features */}
-      <section className="py-24 px-6 border-t border-white/5 bg-slate-950/50">
+      <section className="py-24 px-6 border-t border-border/50 bg-muted/30">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12">
           <FeatureCard 
             icon={<Brain className="w-6 h-6 text-primary" />}
@@ -123,7 +123,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-12 px-6 border-t border-white/5 text-center text-slate-500 text-sm">
+      <footer className="py-12 px-6 border-t border-border/50 text-center text-muted-foreground text-sm">
         <p>© {new Date().getFullYear()} Eden. Built for the future of thought.</p>
       </footer>
     </div>
@@ -134,13 +134,13 @@ function FeatureCard({ icon, title, description }: { icon: React.ReactNode, titl
   return (
     <motion.div 
       whileHover={{ y: -5 }}
-      className="p-8 rounded-2xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-colors"
+      className="p-8 rounded-2xl border border-border/50 bg-card hover:bg-muted/50 transition-colors"
     >
-      <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center mb-6">
+      <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mb-6">
         {icon}
       </div>
-      <h3 className="text-xl font-semibold mb-3 text-white">{title}</h3>
-      <p className="text-slate-400 leading-relaxed">{description}</p>
+      <h3 className="text-xl font-semibold mb-3 text-foreground">{title}</h3>
+      <p className="text-muted-foreground leading-relaxed">{description}</p>
     </motion.div>
   );
 }
