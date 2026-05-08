@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
 import { useEffect, useState } from "react";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 
 import NotFound from "@/pages/not-found";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -79,21 +80,25 @@ function Router() {
 }
 
 function App() {
+  const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "850024943532-e8aanbtp8sjr9jka0c0b0fhmjdpomurb.apps.googleusercontent.com";
+
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <SocketProvider>
-            <TooltipProvider>
-              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                <Router />
-              </WouterRouter>
-              <Toaster />
-            </TooltipProvider>
-          </SocketProvider>
-        </AuthProvider>
-      </QueryClientProvider>
-    </ThemeProvider>
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <SocketProvider>
+              <TooltipProvider>
+                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                  <Router />
+                </WouterRouter>
+                <Toaster />
+              </TooltipProvider>
+            </SocketProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
+    </GoogleOAuthProvider>
   );
 }
 

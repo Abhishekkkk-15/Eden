@@ -76,6 +76,7 @@
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.2",
+    "@react-oauth/google": "^0.13.5",
     "@rollup/rollup-win32-x64-msvc": "^4.60.2",
     "bcryptjs": "^3.0.3",
     "next-auth": "^4.24.14",
