@@ -9,6 +9,7 @@ import agentsRouter from "./agents";
 import dashboardRouter from "./dashboard";
 import workflowsRouter from "./workflows";
 import cloudIntegrationsRouter from "./cloud-integrations";
+import settingsRouter from "./settings";
 import authRouter from "./auth";
 import { authenticate } from "../lib/auth";
 
@@ -31,5 +32,6 @@ router.use(chatRouter);
 router.use(agentsRouter);
 router.use(dashboardRouter);
 router.use(workflowsRouter);
+router.use("/settings", settingsRouter);
 
 export default router;

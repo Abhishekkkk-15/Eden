@@ -29,7 +29,7 @@ export default function LandingPage() {
       <nav className="fixed top-0 w-full z-50 border-b border-border/50 bg-background/95 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/20">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-emerald-600 flex items-center justify-center shadow-lg shadow-primary/20">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <span className="font-bold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">Eden</span>
@@ -70,7 +70,7 @@ export default function LandingPage() {
               opacity: [0.1, 0.2, 0.1],
             }}
             transition={{ duration: 10, repeat: Infinity, delay: 1 }}
-            className="absolute bottom-[10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/20 blur-[100px] rounded-full" 
+            className="absolute bottom-[10%] right-[-10%] w-[40%] h-[40%] bg-emerald-600/10 blur-[100px] rounded-full" 
           />
         </div>
 
@@ -93,7 +93,7 @@ export default function LandingPage() {
             className="text-6xl md:text-8xl font-black tracking-tighter mb-8 leading-[0.9]"
           >
             Organize your chaos.<br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-purple-500 to-primary animate-gradient-x italic font-serif">Perfectly.</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-emerald-500 to-primary animate-gradient-x italic font-serif">Perfectly.</span>
           </motion.h1>
 
           <motion.p
@@ -135,7 +135,7 @@ export default function LandingPage() {
             transition={{ duration: 1.2, delay: 0.8 }}
             className="mt-24 relative mx-auto max-w-6xl group px-4"
           >
-            <div className="absolute -inset-4 bg-gradient-to-r from-primary/20 to-purple-600/20 rounded-[2.5rem] blur-2xl opacity-50 group-hover:opacity-100 transition duration-1000" />
+            <div className="absolute -inset-4 bg-gradient-to-r from-primary/20 to-emerald-600/20 rounded-[2.5rem] blur-2xl opacity-50 group-hover:opacity-100 transition duration-1000" />
             <div className="relative rounded-[2rem] border border-white/10 bg-black/40 backdrop-blur shadow-[0_0_100px_rgba(0,0,0,0.5)] overflow-hidden aspect-[16/10] ring-1 ring-white/20">
               <img 
                 src="/eden_hero_mockup_1778091794881.png" 
@@ -197,21 +197,21 @@ export default function LandingPage() {
               title="Connect Sources"
               description="Upload files, sync cloud drives, or just paste links. Eden ingests everything instantly."
               icon={<Globe className="w-8 h-8" />}
-              color="text-blue-500"
+              color="text-teal-500"
             />
             <Step 
               number="02"
               title="AI Organizes"
               description="Our agents automatically tag, summarize, and file your content into your workspace."
               icon={<Brain className="w-8 h-8" />}
-              color="text-purple-500"
+              color="text-emerald-500"
             />
             <Step 
               number="03"
               title="Automate Workflows"
               description="Trigger custom AI pipelines. Sync notes to Notion, generate reports, or create tasks."
               icon={<Zap className="w-8 h-8" />}
-              color="text-amber-500"
+              color="text-primary"
             />
           </div>
         </div>

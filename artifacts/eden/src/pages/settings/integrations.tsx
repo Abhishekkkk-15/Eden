@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearch } from "wouter";
+import { Link, useSearch } from "wouter";
 import {
   useCloudIntegrations,
   useConnectGoogleDrive,
@@ -30,6 +30,8 @@ import {
   Calendar,
   FileText,
   Sparkles,
+  Mail,
+  ArrowRight,
 } from "lucide-react";
 
 const providerMeta = {
@@ -238,6 +240,39 @@ export default function IntegrationsSettings() {
               </div>
             );
           })}
+        </div>
+      </section>
+
+      <Separator />
+
+      {/* Automation & Communications */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold">Communications</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Configure how Eden communicates with you and other services.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Link href="/settings/email">
+            <div className="rounded-xl border border-border bg-card p-5 hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer group">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-primary/10 group-hover:bg-primary/20 shrink-0 transition-colors">
+                  <Mail className="h-5 w-5 text-primary" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between">
+                    <p className="font-semibold text-sm text-foreground">Email Notifications</p>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
+                    Connect Resend or SMTP to enable email actions in workflows.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Link>
         </div>
       </section>
 

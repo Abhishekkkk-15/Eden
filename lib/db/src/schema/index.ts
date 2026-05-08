@@ -6,3 +6,4 @@ export * from "./agents";
 export * from "./auth";
 export * from "./workflows";
 export * from "./cloud-integrations";
+export * from "./email-integrations";

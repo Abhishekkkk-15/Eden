@@ -1,7 +1,9 @@
 import { Router, type IRouter } from "express";
-import { db, workflowsTable, workflowRunsTable, jobQueueTable, sourcesTable, sourceTagsTable, pagesTable, agentsTable } from "@workspace/db";
+import { db, workflowsTable, workflowRunsTable, jobQueueTable, sourcesTable, sourceTagsTable, pagesTable, agentsTable, emailIntegrationsTable, usersTable } from "@workspace/db";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { z } from "zod";
+import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
 const router: IRouter = Router();
 
@@ -642,9 +644,76 @@ async function executeExtractEntitiesAction(config: { entityTypes?: string[]; so
   return { jobId: job.id };
 }
 
-async function executeSendNotificationAction(config: { message: string; notifyType?: string }, userId: string) {
+async function executeSendNotificationAction(config: { message: string; notifyType?: string; subject?: string; emailRecipient?: string }, userId: string) {
   console.log(`[Notification] Sending ${config.notifyType || 'info'} to user ${userId}: ${config.message}`);
-  // In a real app, this would insert into a notifications table or send a push/email
+  
+  if (config.notifyType === "email") {
+    // 1. Fetch user's email integration settings
+    const [settings] = await db
+      .select()
+      .from(emailIntegrationsTable)
+      .where(eq(emailIntegrationsTable.userId, userId));
+
+    if (!settings) {
+      throw new Error("Email integration not configured. Please go to Settings > Email to set up Resend or SMTP.");
+    }
+
+    // 2. Fetch recipient email if not provided
+    let recipient = config.emailRecipient;
+    if (!recipient) {
+      const [user] = await db
+        .select({ email: usersTable.email })
+        .from(usersTable)
+        .where(eq(usersTable.id, userId));
+      recipient = user?.email;
+    }
+
+    if (!recipient) {
+      throw new Error("Recipient email not found.");
+    }
+
+    const subject = config.subject || "Eden Notification";
+    const body = config.message;
+
+    // 3. Send using selected provider
+    if (settings.provider === "resend") {
+      if (!settings.resendApiKey) throw new Error("Resend API Key is missing.");
+      const resend = new Resend(settings.resendApiKey);
+      const { data, error } = await resend.emails.send({
+        from: settings.smtpFrom || "Eden <notifications@eden.ai>",
+        to: recipient,
+        subject,
+        text: body,
+      });
+      if (error) throw new Error(`Resend failed: ${error.message}`);
+      return { success: true, provider: "resend", messageId: data?.id };
+    } else if (settings.provider === "smtp") {
+      if (!settings.smtpHost || !settings.smtpPort || !settings.smtpUser || !settings.smtpPass) {
+        throw new Error("SMTP configuration is incomplete.");
+      }
+      const transporter = nodemailer.createTransport({
+        host: settings.smtpHost,
+        port: settings.smtpPort,
+        secure: settings.smtpPort === 465,
+        auth: {
+          user: settings.smtpUser,
+          pass: settings.smtpPass,
+        },
+      });
+
+      const info = await transporter.sendMail({
+        from: settings.smtpFrom || settings.smtpUser,
+        to: recipient,
+        subject,
+        text: body,
+      });
+      return { success: true, provider: "smtp", messageId: info.messageId };
+    } else {
+      throw new Error(`Unsupported email provider: ${settings.provider}`);
+    }
+  }
+
+  // Fallback for non-email notifications (e.g. internal system log or toast)
   return { success: true, sentAt: new Date().toISOString() };
 }
 

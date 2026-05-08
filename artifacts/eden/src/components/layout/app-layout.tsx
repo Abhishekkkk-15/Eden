@@ -68,7 +68,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         className={`bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out flex flex-col ${sidebarOpen ? 'w-64' : 'w-0 opacity-0'} overflow-hidden shrink-0`}
       >
         <div className="p-4 flex items-center gap-2 text-sidebar-foreground font-semibold">
-          <div className="w-6 h-6 rounded bg-primary text-primary-foreground flex items-center justify-center text-xs">E</div>
+          <div className="w-6 h-6 rounded bg-gradient-to-br from-primary to-emerald-600 text-white flex items-center justify-center text-[10px] font-bold shadow-sm">E</div>
           <span>Eden Workspace</span>
         </div>
 
