@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { db, sourcesTable, sourceChunksTable, pagesTable, blocksTable, transcriptionsTable, sourceTagsTable } from "@workspace/db";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { db, sourcesTable, sourceChunksTable, pagesTable, blocksTable, transcriptionsTable, sourceTagsTable, jobQueueTable } from "@workspace/db";
+import { and, asc, eq, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
+import { emitToUser } from "../lib/socket";
 import {
   CreateSourceBody,
   GetSourceParams,
@@ -336,6 +337,18 @@ router.post("/sources", async (req, res) => {
             })),
           );
         }
+      });
+
+      // Emit real-time update
+      emitToUser(user.id, "source:updated", { 
+        sourceId: pending.id, 
+        status: "ready",
+        title: pending.title
+      });
+      emitToUser(user.id, "job:completed", { 
+        jobId: -1, // Pseudo-job for direct upload
+        entityId: pending.id,
+        entityType: "source"
       });
 
       // Generate and store embeddings (non-blocking, best-effort)

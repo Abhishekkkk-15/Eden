@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, workflowsTable, workflowRunsTable, jobQueueTable, sourcesTable, sourceTagsTable, pagesTable, agentsTable, emailIntegrationsTable, usersTable } from "@workspace/db";
-import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import nodemailer from "nodemailer";
 import { Resend } from "resend";
@@ -303,7 +303,7 @@ router.delete("/jobs/clear", async (req, res) => {
       .where(
         and(
           eq(jobQueueTable.userId, user.id),
-          sql`${jobQueueTable.status} IN ('completed', 'failed', 'cancelled')`
+          inArray(jobQueueTable.status, ["completed", "failed", "cancelled"])
         )
       )
       .returning();

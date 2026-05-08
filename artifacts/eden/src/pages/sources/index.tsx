@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
+import { useSocket } from "@/providers/socket-provider";
 import {
   getListPagesQueryKey,
   getListSourcesQueryKey,
@@ -775,10 +776,30 @@ export default function SourcesList() {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   const [folderId, setFolderId] = useState<number | null>(null);
+  // Search state
   const [searchQuery, setSearchQuery] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("q") || "";
   });
+
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleUpdate = () => {
+      console.log("[SourcesList] Refreshing due to real-time update...");
+      queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
+    };
+
+    socket.on("job:completed", handleUpdate);
+    socket.on("source:updated", handleUpdate);
+
+    return () => {
+      socket.off("job:completed", handleUpdate);
+      socket.off("source:updated", handleUpdate);
+    };
+  }, [socket, queryClient]);
 
   const { data: searchResults, isLoading: searchLoading } = useSearchWorkspace(
     { q: searchQuery },
