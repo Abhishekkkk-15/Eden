@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { toast } from "sonner";
 import { Loader2, Github, Mail } from "lucide-react";
 
 export default function LoginPage() {
+  const { login } = useAuth();
   const [, setLocation] = useLocation();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
@@ -27,7 +29,8 @@ export default function LoginPage() {
       if (!res.ok) throw new Error("Invalid credentials");
 
       const data = await res.json();
-      localStorage.setItem("token", data.token);
+      console.log("[Login] Success response:", data);
+      login(data.token, data.user);
       toast.success("Logged in successfully!");
       setLocation("/");
     } catch (err: any) {

@@ -8,6 +8,10 @@ import { eq, and } from "drizzle-orm";
 import { triggerWorkflows } from "../routes/workflows";
 import { persistUploadedFile } from "./source-media";
 import { queueJob } from "./job-queue";
+import { Worker } from "bullmq";
+import { redis } from "./redis";
+import { CLOUD_IMPORT_QUEUE, cloudImportQueue } from "./queues";
+import { emitToUser } from "./socket";
 
 // Poll every 5 seconds
 const POLL_INTERVAL = 5000;
@@ -184,10 +188,9 @@ async function processQueueItem(itemId: number) {
       .where(eq(cloudImportQueueTable.id, itemId))
       .returning();
 
-    if (!item) {
-      processing.delete(itemId);
-      return;
-    }
+    if (!item) return;
+
+    emitToUser(item.userId, "import:status", { itemId, status: "downloading" });
 
     console.log(`[CloudImport] Processing item ${itemId}: ${item.providerFileName} (Mime: ${item.mimeType})`);
 
@@ -237,6 +240,8 @@ async function processQueueItem(itemId: number) {
       .update(cloudImportQueueTable)
       .set({ status: "processing", updatedAt: new Date() })
       .where(eq(cloudImportQueueTable.id, itemId));
+
+    emitToUser(item.userId, "import:status", { itemId, status: "processing" });
 
     // ── Create the source record first (so we have an ID for Cloudinary) ──
     let mimeType = item.mimeType;
@@ -357,6 +362,8 @@ async function processQueueItem(itemId: number) {
       })
       .where(eq(cloudImportQueueTable.id, itemId));
 
+    emitToUser(item.userId, "import:status", { itemId, status: "completed", sourceId: source.id });
+
     console.log(
       `[CloudImport] ✓ Item ${itemId} → source ${source.id} (${item.providerFileName})`
     );
@@ -409,35 +416,22 @@ async function processQueueItem(itemId: number) {
   }
 }
 
-// ── Poll for pending items ────────────────────────────────────────────────────
-async function pollCloudImportQueue() {
-  if (processing.size >= MAX_CONCURRENT) return;
-
-  try {
-    const available = MAX_CONCURRENT - processing.size;
-
-    const pendingItems = await db
-      .select()
-      .from(cloudImportQueueTable)
-      .where(eq(cloudImportQueueTable.status, "pending"))
-      .limit(available);
-
-    for (const item of pendingItems) {
-      if (!processing.has(item.id)) {
-        processing.add(item.id);
-        void processQueueItem(item.id);
-      }
-    }
-  } catch (err) {
-    console.error("[CloudImport] Error polling queue:", err);
-  }
-}
-
-// ── Public: start the processor ───────────────────────────────────────────────
+// ── Worker logic ─────────────────────────────────────────────────────────────
 export function startCloudImportProcessor(): () => void {
-  console.log("[CloudImport] Starting cloud import processor...");
+  console.log("[CloudImport] Starting BullMQ worker...");
 
-  // Reset any stuck items (processing/downloading) from previous session back to pending
+  const worker = new Worker(
+    CLOUD_IMPORT_QUEUE,
+    async (job) => {
+      await processQueueItem(job.data.itemId);
+    },
+    {
+      connection: redis,
+      concurrency: MAX_CONCURRENT,
+    }
+  );
+
+  // Initial reset of stuck items
   void (async () => {
     try {
       const { or, ne } = await import("drizzle-orm");
@@ -455,19 +449,22 @@ export function startCloudImportProcessor(): () => void {
       
       if (results.length > 0) {
         console.log(`[CloudImport] Reset ${results.length} stuck items to pending status`);
+        for (const item of results) {
+          await cloudImportQueue.add(`import:${item.id}`, { itemId: item.id });
+        }
       }
     } catch (err) {
       console.error("[CloudImport] Failed to reset stuck items:", err);
     }
-    
-    // Run immediately after reset
-    void pollCloudImportQueue();
   })();
 
-  const interval = setInterval(pollCloudImportQueue, POLL_INTERVAL);
-
   return () => {
-    clearInterval(interval);
-    console.log("[CloudImport] Stopped cloud import processor");
+    void worker.close();
+    console.log("[CloudImport] Stopped BullMQ worker");
   };
+}
+
+// Helper to add to queue from routes
+export async function queueCloudImport(itemId: number) {
+  await cloudImportQueue.add(`import:${itemId}`, { itemId });
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { toast } from "sonner";
 import { Loader2, ArrowLeft } from "lucide-react";
 
 export default function SignupPage() {
+  const { login } = useAuth();
   const [, setLocation] = useLocation();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
@@ -36,7 +38,7 @@ export default function SignupPage() {
       }
 
       const data = await res.json();
-      localStorage.setItem("token", data.token);
+      login(data.token, data.user);
       toast.success("Account created successfully!");
       setLocation("/");
     } catch (err: any) {

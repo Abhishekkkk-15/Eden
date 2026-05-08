@@ -3,6 +3,10 @@ import { eq, and, asc, lte } from "drizzle-orm";
 import { summarize, completeText, extractEntities } from "./ai";
 import { transcribeSource, transcribeImage, transcribeVideoFrames } from "./transcription";
 import { generateMeetingMinutes } from "./notion-agent";
+import { Worker } from "bullmq";
+import { redis } from "./redis";
+import { AI_JOB_QUEUE } from "./queues";
+import { emitToUser } from "./socket";
 
 // Job processor configuration
 const JOB_POLL_INTERVAL = 5000; // Check for jobs every 5 seconds
@@ -12,60 +16,34 @@ const MAX_CONCURRENT_JOBS = 3;
 const processingJobs = new Set<number>();
 
 /**
- * Start the job queue processor
+ * Start the job queue processor (BullMQ Worker)
  */
 export function startJobQueueProcessor(): () => void {
-  console.log("[JobQueue] Starting job processor...");
+  console.log("[JobQueue] Starting BullMQ worker...");
 
-  const interval = setInterval(async () => {
-    await processNextJobs();
-  }, JOB_POLL_INTERVAL);
-
-  // Process immediately on start
-  void processNextJobs();
-
-  // Return cleanup function
-  return () => {
-    clearInterval(interval);
-    console.log("[JobQueue] Stopped job processor");
-  };
-}
-
-/**
- * Process the next batch of pending jobs
- */
-async function processNextJobs() {
-  // Don't process if we're at capacity
-  if (processingJobs.size >= MAX_CONCURRENT_JOBS) {
-    return;
-  }
-
-  try {
-    // Find pending jobs that are scheduled to run now or in the past
-    const now = new Date();
-    const availableSlots = MAX_CONCURRENT_JOBS - processingJobs.size;
-
-    const pendingJobs = await db
-      .select()
-      .from(jobQueueTable)
-      .where(
-        and(
-          eq(jobQueueTable.status, "pending"),
-          lte(jobQueueTable.scheduledAt, now)
-        )
-      )
-      .orderBy(asc(jobQueueTable.priority), asc(jobQueueTable.scheduledAt))
-      .limit(availableSlots);
-
-    for (const job of pendingJobs) {
-      if (!processingJobs.has(job.id)) {
-        processingJobs.add(job.id);
-        void processJob(job.id); // Process without awaiting to allow parallel execution
-      }
+  const worker = new Worker(
+    AI_JOB_QUEUE,
+    async (job) => {
+      await processJob(job.data.jobId);
+    },
+    {
+      connection: redis,
+      concurrency: MAX_CONCURRENT_JOBS,
     }
-  } catch (error) {
-    console.error("[JobQueue] Error fetching pending jobs:", error);
-  }
+  );
+
+  worker.on("completed", (job) => {
+    console.log(`[JobQueue] Job ${job.id} completed`);
+  });
+
+  worker.on("failed", (job, err) => {
+    console.error(`[JobQueue] Job ${job?.id} failed:`, err);
+  });
+
+  return () => {
+    void worker.close();
+    console.log("[JobQueue] Stopped BullMQ worker");
+  };
 }
 
 /**
@@ -142,9 +120,10 @@ async function processJob(jobId: number) {
             scheduledAt: new Date(Date.now() + Math.pow(2, job.retryCount) * 1000), // Exponential backoff
             updatedAt: new Date(),
           })
-          .where(eq(jobQueueTable.id, jobId));
+          .where(eq(jobQueueTable.id, jobId))
+          .returning();
       } else {
-        await db
+        const [failedJob] = await db
           .update(jobQueueTable)
           .set({
             status: "failed",
@@ -152,7 +131,12 @@ async function processJob(jobId: number) {
             completedAt: new Date(),
             updatedAt: new Date(),
           })
-          .where(eq(jobQueueTable.id, jobId));
+          .where(eq(jobQueueTable.id, jobId))
+          .returning();
+
+        if (failedJob) {
+          emitToUser(failedJob.userId, "job:failed", { jobId, error });
+        }
       }
     } else {
       await db
@@ -164,9 +148,11 @@ async function processJob(jobId: number) {
           updatedAt: new Date(),
         })
         .where(eq(jobQueueTable.id, jobId));
+
+      emitToUser(job.userId, "job:completed", { jobId });
     }
-  } catch (error) {
-    console.error(`[JobQueue] Critical error processing job ${jobId}:`, error);
+  } catch (err) {
+    console.error(`[JobQueue] Critical error processing job ${jobId}:`, err);
   } finally {
     processingJobs.delete(jobId);
   }
@@ -451,17 +437,26 @@ async function processImportUrlJob(job: typeof jobQueueTable.$inferSelect) {
 }
 
 /**
- * Update job progress
+ * Update job progress and emit via socket
  */
 async function updateJobProgress(jobId: number, progress: number, message: string) {
-  await db
+  const [updatedJob] = await db
     .update(jobQueueTable)
     .set({
       progress,
       progressMessage: message,
       updatedAt: new Date(),
     })
-    .where(eq(jobQueueTable.id, jobId));
+    .where(eq(jobQueueTable.id, jobId))
+    .returning();
+
+  if (updatedJob) {
+    emitToUser(updatedJob.userId, "job:progress", {
+      jobId,
+      progress,
+      message,
+    });
+  }
 }
 
 /**
@@ -489,6 +484,20 @@ export async function queueJob(
       maxRetries: options.maxRetries ?? 3,
     })
     .returning();
+
+  if (job) {
+    const { aiJobQueue } = await import("./queues");
+    await aiJobQueue.add(
+      `ai_job:${job.id}`,
+      { jobId: job.id },
+      {
+        priority: options.priority ?? 0,
+        delay: options.scheduledAt ? Math.max(0, options.scheduledAt.getTime() - Date.now()) : 0,
+      }
+    );
+
+    emitToUser(userId, "job:created", job);
+  }
 
   return job;
 }

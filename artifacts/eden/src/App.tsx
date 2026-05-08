@@ -8,6 +8,8 @@ import { setAuthTokenGetter } from "@workspace/api-client-react";
 
 import NotFound from "@/pages/not-found";
 import { AppLayout } from "@/components/layout/app-layout";
+import { SocketProvider } from "@/providers/socket-provider";
+import { AuthProvider } from "@/hooks/use-auth";
 import Home from "@/pages/home";
 import PageEditor from "@/pages/pages/[id]";
 import SourcesList from "@/pages/sources/index";
@@ -78,12 +80,16 @@ function App() {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
+        <AuthProvider>
+          <SocketProvider>
+            <TooltipProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <Router />
+              </WouterRouter>
+              <Toaster />
+            </TooltipProvider>
+          </SocketProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

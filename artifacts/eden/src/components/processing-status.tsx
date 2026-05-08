@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSocket } from "@/providers/socket-provider";
 import {
   Collapsible,
   CollapsibleContent,
@@ -305,25 +306,56 @@ export function ProcessingStatus({
 // Hook for real-time job updates
 export function useProcessingJobs(pollInterval = 5000) {
   const [jobs, setJobs] = useState<ProcessingJob[]>([]);
+  const socket = useSocket();
+
+  const fetchJobs = useCallback(async () => {
+    try {
+      const response = await fetch("/api/jobs");
+      if (response.ok) {
+        const data = await response.json();
+        setJobs(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch jobs:", error);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchJobs = async () => {
-      try {
-        const response = await fetch("/api/jobs");
-        if (response.ok) {
-          const data = await response.json();
-          setJobs(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch jobs:", error);
-      }
-    };
-
     fetchJobs();
     const interval = setInterval(fetchJobs, pollInterval);
 
     return () => clearInterval(interval);
-  }, [pollInterval]);
+  }, [fetchJobs, pollInterval]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("job:progress", (data: { jobId: number; progress: number; message: string }) => {
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === data.jobId
+            ? { ...j, status: "processing", progress: data.progress, message: data.message }
+            : j
+        )
+      );
+    });
+
+    socket.on("job:created", (job: ProcessingJob) => {
+      setJobs((prev) => [job, ...prev]);
+    });
+
+    socket.on("job:completed", (data: { jobId: number }) => {
+      setJobs((prev) =>
+        prev.map((j) => (j.id === data.jobId ? { ...j, status: "completed", progress: 100 } : j))
+      );
+    });
+
+    return () => {
+      socket.off("job:progress");
+      socket.off("job:created");
+      socket.off("job:completed");
+    };
+  }, [socket]);
 
   const cancelJob = async (jobId: number) => {
     try {

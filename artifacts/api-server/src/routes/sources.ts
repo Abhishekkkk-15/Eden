@@ -256,6 +256,7 @@ router.post("/sources", async (req, res) => {
 
   void (async () => {
     try {
+      console.log(`[Ingestion] Starting background processing for source ${pending.id} (${body.kind})`);
       let content = body.content ?? "";
       let transcription: string | null = null;
 

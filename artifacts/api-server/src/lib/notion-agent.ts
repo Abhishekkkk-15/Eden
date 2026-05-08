@@ -175,13 +175,17 @@ export async function generateMeetingMinutes(userId: string, sourceTitle: string
       .limit(1);
 
     if (!integration) {
-      console.log(`[NotionAgent] No active Notion integration for user ${userId}, skipping meeting minutes.`);
+      console.log(`[NotionAgent] ❌ No active Notion integration found for user ${userId}. Checking all integrations for this user...`);
+      const all = await db.select().from(cloudIntegrationsTable).where(eq(cloudIntegrationsTable.userId, userId));
+      console.log(`[NotionAgent] Found ${all.length} total integrations for user:`, all.map(i => `${i.provider} (active=${i.isActive})`));
       return;
     }
 
     const syncSettings = integration.syncSettings as any;
+    console.log(`[NotionAgent] Integration found. autoSyncMeetingMinutes state:`, syncSettings?.autoSyncMeetingMinutes);
+    
     if (!syncSettings?.autoSyncMeetingMinutes) {
-      console.log(`[NotionAgent] Auto-minutes disabled for user ${userId}, skipping.`);
+      console.log(`[NotionAgent] ⏭️ Auto-minutes disabled for user ${userId}, skipping.`);
       return;
     }
 
@@ -213,8 +217,8 @@ export async function generateMeetingMinutes(userId: string, sourceTitle: string
     let dbInfo = searchResult.results?.[0];
 
     if (!dbInfo) {
-      console.log(`[NotionAgent] "Meeting Notes" database not found. Attempting to find a parent page...`);
-      // Create it if not found (find a parent page first)
+      console.log(`[NotionAgent] "Meeting Notes" database not found. Creating a new one...`);
+      // ... (Rest of creation logic stays same for now, but we search for parent page)
       const pageSearch = await fetch("https://api.notion.com/v1/search", {
         method: "POST",
         headers: {
@@ -228,7 +232,6 @@ export async function generateMeetingMinutes(userId: string, sourceTitle: string
       const parentPage = pageSearchResult.results?.[0];
 
       if (parentPage) {
-        console.log(`[NotionAgent] Found parent page: ${parentPage.id}. Creating database...`);
         const createRes = await fetch("https://api.notion.com/v1/databases", {
           method: "POST",
           headers: {
@@ -241,21 +244,45 @@ export async function generateMeetingMinutes(userId: string, sourceTitle: string
             title: [{ type: "text", text: { content: "Meeting Notes" } }],
             properties: {
               Name: { title: {} },
-              Date: { date: {} },
-              "Source File": { url: {} }
+              Date: { date: {} }
             }
           }),
         });
         dbInfo = await createRes.json();
-      } else {
-        console.warn(`[NotionAgent] No parent page found. Please share a page with Eden.`);
       }
     }
 
     if (!dbInfo) throw new Error("Could not find or create a Notion database for meeting notes.");
 
-    // 4. Create the Page in Notion
-    await fetch("https://api.notion.com/v1/pages", {
+    const dbUrl = dbInfo.url || `https://www.notion.so/${dbInfo.id.replace(/-/g, "")}`;
+    console.log(`[NotionAgent] Using database: ${dbInfo.title?.[0]?.plain_text || "Meeting Notes"} (${dbUrl})`);
+
+    // 4. Detect Database Properties for Mapping
+    const properties = dbInfo.properties || {};
+    const propertyMap: Record<string, any> = {};
+
+    // Find title property
+    const titleProp = Object.keys(properties).find(k => properties[k].type === "title") || "Name";
+    propertyMap[titleProp] = { title: [{ type: "text", text: { content: `Minutes: ${sourceTitle}` } }] };
+
+    const dateProp = Object.keys(properties).find(k => properties[k].type === "date");
+    if (dateProp) {
+      propertyMap[dateProp] = { date: { start: new Date().toISOString().split("T")[0] } };
+    }
+
+    // Find Summary/Notes property
+    const summaryProp = Object.keys(properties).find(k => 
+      (k.toLowerCase().includes("summary") || k.toLowerCase().includes("notes")) && 
+      (properties[k].type === "rich_text" || properties[k].type === "text")
+    );
+    if (summaryProp) {
+      console.log(`[NotionAgent] Found summary property: "${summaryProp}"`);
+      propertyMap[summaryProp] = { rich_text: [{ type: "text", text: { content: minutes.slice(0, 1990) } }] };
+    }
+
+    // 5. Create the Page in Notion
+    console.log(`[NotionAgent] Syncing to Notion...`);
+    const pageRes = await fetch("https://api.notion.com/v1/pages", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -264,25 +291,45 @@ export async function generateMeetingMinutes(userId: string, sourceTitle: string
       },
       body: JSON.stringify({
         parent: { database_id: dbInfo.id },
-        properties: {
-          Name: { title: [{ text: { content: `Minutes: ${sourceTitle}` } }] },
-          Date: { date: { start: new Date().toISOString().split("T")[0] } }
-        },
+        properties: propertyMap,
         children: [
           {
             object: "block",
             type: "paragraph",
             paragraph: {
-              rich_text: [{ type: "text", text: { content: minutes.slice(0, 2000) } }]
+              rich_text: [{ type: "text", text: { content: minutes.slice(0, 1990) } }]
+            }
+          },
+          {
+            object: "block",
+            type: "divider",
+            divider: {}
+          },
+          {
+            object: "block",
+            type: "heading_3",
+            heading_3: { rich_text: [{ type: "text", text: { content: "Original Transcription" } }] }
+          },
+          {
+            object: "block",
+            type: "paragraph",
+            paragraph: {
+              rich_text: [{ type: "text", text: { content: transcription.slice(0, 1990) + "..." } }]
             }
           }
         ]
       }),
     });
 
-    console.log(`[NotionAgent] ✓ Meeting minutes synced to Notion for "${sourceTitle}"`);
+    if (!pageRes.ok) {
+      const errorData = await pageRes.json();
+      console.error(`[NotionAgent] ❌ Notion Page Creation Failed:`, JSON.stringify(errorData, null, 2));
+      throw new Error(`Notion API error: ${errorData.message || "Unknown error"}`);
+    }
+
+    console.log(`[NotionAgent] ✓ Meeting minutes successfully synced to Notion for "${sourceTitle}"`);
   } catch (err) {
-    console.error("[NotionAgent] Failed to automate meeting minutes:", err);
+    console.error("[NotionAgent] ❌ Failed to automate meeting minutes:", err);
   }
 }
 

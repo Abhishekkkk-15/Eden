@@ -13,6 +13,7 @@ import {
   Zap,
   Settings,
 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import { useListPages, useCreatePage, getListPagesQueryKey } from "@workspace/api-client-react";
 import { CommandPalette } from "../command-palette";
 import { useQueryClient } from "@tanstack/react-query";
@@ -22,6 +23,7 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
+  const { logout } = useAuth();
   const [location, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { data: pages } = useListPages();
@@ -41,8 +43,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    window.location.href = "/login";
+    logout();
   };
 
   const navItems = [

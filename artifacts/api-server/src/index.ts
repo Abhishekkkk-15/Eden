@@ -1,10 +1,12 @@
 import "./load-env";
+import { createServer } from "http";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startJobQueueProcessor } from "./lib/job-queue";
 import { startCloudImportProcessor } from "./lib/cloud-import-processor";
 import { startNotionAgent } from "./lib/notion-agent";
 import { initEmbeddingExtension } from "./lib/embed-init";
+import { initSocket } from "./lib/socket";
 
 const rawPort = process.env["PORT"];
 
@@ -32,13 +34,14 @@ const stopCloudImportProcessor = startCloudImportProcessor();
 // Start autonomous Notion agent
 const stopNotionAgent = startNotionAgent();
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
+// Create HTTP server
+const httpServer = createServer(app);
 
-  logger.info({ port }, "Server listening");
+// Initialize WebSockets
+initSocket(httpServer);
+
+httpServer.listen(port, () => {
+  logger.info({ port }, "Server listening (with WebSockets)");
 });
 
 // Graceful shutdown

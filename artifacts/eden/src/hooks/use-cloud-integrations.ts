@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { API_BASE_URL } from "@/config";
+import { useSocket } from "@/providers/socket-provider";
 export interface CloudIntegration {
   id: number;
   provider: "google_drive" | "dropbox" | "one_drive" | "notion";
@@ -312,6 +314,44 @@ export function useImportCloudFile() {
 }
 
 export function useImportQueue(status?: string) {
+  const queryClient = useQueryClient();
+  const socket = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleStatusUpdate = (data: { itemId: number; status: string; sourceId?: number }) => {
+      console.log("[Socket] Received import:status update:", data);
+      
+      // Update the import queue query cache
+      queryClient.setQueryData<ImportQueueItem[]>(["import-queue", status], (old) => {
+        if (!old) return old;
+        return old.map((item) => {
+          if (item.id === data.itemId) {
+            return {
+              ...item,
+              status: data.status as any,
+              sourceId: data.sourceId ?? item.sourceId,
+              updatedAt: new Date().toISOString(),
+            };
+          }
+          return item;
+        });
+      });
+
+      // If completed, invalidate sources list
+      if (data.status === "completed") {
+        queryClient.invalidateQueries({ queryKey: ["sources"] });
+      }
+    };
+
+    socket.on("import:status", handleStatusUpdate);
+
+    return () => {
+      socket.off("import:status", handleStatusUpdate);
+    };
+  }, [socket, queryClient, status]);
+
   return useQuery({
     queryKey: ["import-queue", status],
     queryFn: () => fetchImportQueue(status),

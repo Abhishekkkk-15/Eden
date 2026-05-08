@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod";
+import { queueCloudImport } from "../lib/cloud-import-processor";
 import { authenticate, verifyToken } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -933,6 +934,10 @@ router.post("/cloud/integrations/:id/import", async (req, res) => {
         indexOnly: body.indexOnly,
       })
       .returning();
+
+    if (queueItem) {
+      await queueCloudImport(queueItem.id);
+    }
 
     res.status(201).json(queueItem);
     return;
