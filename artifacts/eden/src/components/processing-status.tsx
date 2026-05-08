@@ -55,7 +55,7 @@ interface ProcessingStatusProps {
   className?: string;
 }
 
-const jobTypeConfig: Record<JobType, { icon: React.ReactNode; label: string; color: string }> = {
+const jobTypeConfig: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
   transcribe: { icon: <Headphones className="w-4 h-4" />, label: "Transcribing", color: "text-blue-500" },
   analyze_video: { icon: <Film className="w-4 h-4" />, label: "Analyzing Video", color: "text-purple-500" },
   analyze_image: { icon: <Image className="w-4 h-4" />, label: "Analyzing Image", color: "text-green-500" },
@@ -63,7 +63,12 @@ const jobTypeConfig: Record<JobType, { icon: React.ReactNode; label: string; col
   generate_summary: { icon: <FileCode className="w-4 h-4" />, label: "Summarizing", color: "text-pink-500" },
   import_url: { icon: <Link className="w-4 h-4" />, label: "Importing URL", color: "text-cyan-500" },
   ai_transform: { icon: <FileCode className="w-4 h-4" />, label: "AI Processing", color: "text-amber-500" },
+  ai_organize: { icon: <FileCode className="w-4 h-4" />, label: "Organizing", color: "text-indigo-500" },
+  generate_tags: { icon: <Link className="w-4 h-4" />, label: "Tagging", color: "text-teal-500" },
+  extract_entities: { icon: <FileText className="w-4 h-4" />, label: "Extracting Entities", color: "text-orange-500" },
 };
+
+const DEFAULT_CONFIG = { icon: <Clock className="w-4 h-4" />, label: "Processing", color: "text-muted-foreground" };
 
 const statusConfig: Record<JobStatus, { icon: React.ReactNode; badge: string; progressColor: string }> = {
   pending: { icon: <Clock className="w-4 h-4" />, badge: "Pending", progressColor: "bg-muted" },
@@ -74,7 +79,7 @@ const statusConfig: Record<JobStatus, { icon: React.ReactNode; badge: string; pr
 };
 
 function JobItem({ job, onCancel, onRetry }: { job: ProcessingJob; onCancel?: (id: number) => void; onRetry?: (id: number) => void }) {
-  const config = jobTypeConfig[job.type];
+  const config = jobTypeConfig[job.type] || DEFAULT_CONFIG;
   const status = statusConfig[job.status];
 
   const formatDuration = () => {
@@ -181,14 +186,6 @@ export function ProcessingStatus({
   const [isOpen, setIsOpen] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Auto-collapse when all done
-  useEffect(() => {
-    const activeJobs = jobs.filter((j) => j.status === "processing" || j.status === "pending");
-    if (activeJobs.length === 0 && jobs.length > 0) {
-      // Keep open but show completed state
-    }
-  }, [jobs]);
-
   const activeJobs = jobs.filter((j) => j.status === "processing" || j.status === "pending");
   const completedJobs = jobs.filter((j) => j.status === "completed");
   const failedJobs = jobs.filter((j) => j.status === "failed");
@@ -198,58 +195,69 @@ export function ProcessingStatus({
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ y: 100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 100, opacity: 0 }}
-        className={cn("fixed bottom-4 right-4 z-50 w-[400px] max-w-[calc(100vw-2rem)]", className)}
+        initial={{ y: 20, opacity: 0, scale: 0.95 }}
+        animate={{ y: 0, opacity: 1, scale: 1 }}
+        exit={{ y: 20, opacity: 0, scale: 0.95 }}
+        className={cn(
+          "fixed bottom-6 right-6 z-50 w-[420px] max-w-[calc(100vw-3rem)]",
+          className
+        )}
       >
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-          <div className="bg-card border shadow-2xl rounded-xl overflow-hidden">
+          <div className="bg-card/80 backdrop-blur-xl border border-border/50 shadow-2xl rounded-2xl overflow-hidden ring-1 ring-black/5 dark:ring-white/5">
             {/* Header */}
             <CollapsibleTrigger asChild>
-              <button className="w-full p-3 flex items-center gap-3 hover:bg-muted/50 transition-colors">
-                <div className="flex items-center gap-2">
+              <button className="w-full p-4 flex items-center gap-4 hover:bg-muted/30 transition-all group">
+                <div className="relative">
                   {activeJobs.length > 0 ? (
-                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                    <div className="relative">
+                      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full animate-pulse" />
+                    </div>
                   ) : failedJobs.length > 0 ? (
-                    <XCircle className="w-5 h-5 text-red-500" />
+                    <div className="w-6 h-6 rounded-full bg-red-500/20 flex items-center justify-center">
+                      <XCircle className="w-4 h-4 text-red-500" />
+                    </div>
                   ) : (
-                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center">
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    </div>
                   )}
+                </div>
 
-                  <div className="text-left">
-                    <div className="font-medium text-sm">
-                      {activeJobs.length > 0
-                        ? `${activeJobs.length} processing`
-                        : failedJobs.length > 0
-                        ? `${failedJobs.length} failed`
-                        : "All done"}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {jobs.length} total jobs
-                    </div>
+                <div className="text-left flex-1">
+                  <div className="font-semibold text-[15px] tracking-tight">
+                    {activeJobs.length > 0
+                      ? `${activeJobs.length} Background Task${activeJobs.length > 1 ? 's' : ''}`
+                      : failedJobs.length > 0
+                      ? `${failedJobs.length} Issue${failedJobs.length > 1 ? 's' : ''} Detected`
+                      : "System Up to Date"}
+                  </div>
+                  <div className="text-[12px] text-muted-foreground/80 font-medium">
+                    {jobs.length} total • {completedJobs.length} completed
                   </div>
                 </div>
 
-                <div className="flex-1" />
-
-                <div className="flex items-center gap-1">
-                  {activeJobs.length === 0 && completedJobs.length > 0 && (
+                <div className="flex items-center gap-2">
+                  {(completedJobs.length > 0 || failedJobs.length > 0) && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 text-xs"
+                      className="h-8 px-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full"
                       onClick={(e) => {
                         e.stopPropagation();
+                        console.log("[ProcessingStatus] Clear clicked");
                         onClear?.();
                       }}
                     >
-                      Clear
+                      Clear All
                     </Button>
                   )}
-                  <ChevronDown
-                    className={cn("w-4 h-4 transition-transform", isOpen && "rotate-180")}
-                  />
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted group-hover:scale-110 transition-transform">
+                    <ChevronDown
+                      className={cn("w-4 h-4 text-muted-foreground transition-transform duration-300", isOpen && "rotate-180")}
+                    />
+                  </div>
                 </div>
               </button>
             </CollapsibleTrigger>
@@ -306,11 +314,16 @@ export function ProcessingStatus({
 // Hook for real-time job updates
 export function useProcessingJobs(pollInterval = 5000) {
   const [jobs, setJobs] = useState<ProcessingJob[]>([]);
-  const socket = useSocket();
+  const { socket, isConnected } = useSocket();
 
   const fetchJobs = useCallback(async () => {
     try {
-      const response = await fetch("/api/jobs");
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const response = await fetch("/api/jobs", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.ok) {
         const data = await response.json();
         setJobs(data);
@@ -322,10 +335,18 @@ export function useProcessingJobs(pollInterval = 5000) {
 
   useEffect(() => {
     fetchJobs();
-    const interval = setInterval(fetchJobs, pollInterval);
+    
+    // Only poll as a fallback if socket isn't connected
+    let interval: any;
+    if (!isConnected) {
+      console.log("[Socket] Fallback: Starting polling for jobs...");
+      interval = setInterval(fetchJobs, pollInterval);
+    }
 
-    return () => clearInterval(interval);
-  }, [fetchJobs, pollInterval]);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [fetchJobs, pollInterval, isConnected]);
 
   useEffect(() => {
     if (!socket) return;
@@ -383,5 +404,20 @@ export function useProcessingJobs(pollInterval = 5000) {
     }
   };
 
-  return { jobs, cancelJob, retryJob };
+  const clearJobs = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/jobs/clear", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.ok) {
+        setJobs((prev) => prev.filter((j) => j.status === "processing" || j.status === "pending"));
+      }
+    } catch (error) {
+      console.error("Failed to clear jobs:", error);
+    }
+  }, []);
+
+  return { jobs, cancelJob, retryJob, clearJobs };
 }

@@ -315,7 +315,7 @@ export function useImportCloudFile() {
 
 export function useImportQueue(status?: string) {
   const queryClient = useQueryClient();
-  const socket = useSocket();
+  const { socket } = useSocket();
 
   useEffect(() => {
     if (!socket) return;

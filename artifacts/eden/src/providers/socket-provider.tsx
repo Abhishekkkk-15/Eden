@@ -2,13 +2,14 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "@/hooks/use-auth";
 
-const SocketContext = createContext<Socket | null>(null);
+const SocketContext = createContext<{ socket: Socket | null; isConnected: boolean }>({ socket: null, isConnected: false });
 
 export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     console.log("[Socket] Effect triggered - User object:", user);
@@ -20,10 +21,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       socketInstance.on("connect", () => {
         console.log("[Socket] Connected to server successfully");
+        setIsConnected(true);
+      });
+
+      socketInstance.on("disconnect", () => {
+        console.log("[Socket] Disconnected from server");
+        setIsConnected(false);
       });
 
       socketInstance.on("connect_error", (err) => {
         console.error("[Socket] Connection error:", err.message);
+        setIsConnected(false);
       });
 
       setSocket(socketInstance);
@@ -37,7 +45,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [user?.id]);
 
   return (
-    <SocketContext.Provider value={socket}>
+    <SocketContext.Provider value={{ socket, isConnected }}>
       {children}
     </SocketContext.Provider>
   );

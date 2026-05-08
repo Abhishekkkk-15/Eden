@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, workflowsTable, workflowRunsTable, jobQueueTable, sourcesTable, sourceTagsTable, pagesTable, agentsTable } from "@workspace/db";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -288,6 +288,28 @@ router.post("/jobs/:id/cancel", async (req, res) => {
   } catch (error) {
     console.error("Failed to cancel job:", error);
     res.status(500).json({ error: "Failed to cancel job" });
+  }
+});
+
+// DELETE /jobs/clear - Clear all terminal jobs (completed, failed, cancelled)
+router.delete("/jobs/clear", async (req, res) => {
+  const user = (req as any).user;
+
+  try {
+    const deleted = await db
+      .delete(jobQueueTable)
+      .where(
+        and(
+          eq(jobQueueTable.userId, user.id),
+          sql`${jobQueueTable.status} IN ('completed', 'failed', 'cancelled')`
+        )
+      )
+      .returning();
+
+    res.json({ success: true, count: deleted.length });
+  } catch (error) {
+    console.error("Failed to clear jobs:", error);
+    res.status(500).json({ error: "Failed to clear jobs" });
   }
 });
 

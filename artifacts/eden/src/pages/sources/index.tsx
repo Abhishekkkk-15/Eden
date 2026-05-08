@@ -63,7 +63,6 @@ import { WorkspaceSearchPanel } from "@/components/sources/workspace-search-pane
 import { AssignAgentDialog } from "@/components/sources/assign-agent-dialog";
 import { PhotoFolder, type FolderItem } from "@/components/PhotoFolder";
 import { BulkOperationsToolbar } from "@/components/sources/bulk-operations-toolbar";
-import { ProcessingStatus, useProcessingJobs } from "@/components/processing-status";
 import { useSourceShortcuts, useBulkSelection } from "@/hooks/use-keyboard-shortcuts";
   import { CloudImportDialog } from "@/components/cloud/import-dialog";
 import {
@@ -719,8 +718,6 @@ export default function SourcesList() {
   const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
-  // Processing jobs (for background status)
-  const { jobs, cancelJob, retryJob } = useProcessingJobs(5000);
 
   // Fetch workflows to build folder-agent map
   const { data: allWorkflows, refetch: refetchFolderAgents } = useQuery({
@@ -1430,14 +1427,6 @@ export default function SourcesList() {
           availableFolders={folderPages.map((f) => ({ id: f.id, title: f.title, emoji: undefined }))}
           folderPages={folderPages.map((f) => ({ id: f.id, title: f.title, kind: f.kind, parentId: f.parentId, emoji: f.emoji }))}
           selectedSourceIds={Array.from(selectedIds)}
-        />
-
-        {/* Background Processing Status */}
-        <ProcessingStatus
-          jobs={jobs}
-          onCancel={cancelJob}
-          onRetry={retryJob}
-          onClear={() => toast.info("Clear completed jobs")}
         />
       </div>
     </div>

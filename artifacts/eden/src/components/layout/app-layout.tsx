@@ -17,6 +17,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useListPages, useCreatePage, getListPagesQueryKey } from "@workspace/api-client-react";
 import { CommandPalette } from "../command-palette";
 import { useQueryClient } from "@tanstack/react-query";
+import { ProcessingStatus, useProcessingJobs } from "../processing-status";
+import { toast } from "sonner";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -54,6 +56,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     { icon: Zap, label: "Workflows", href: "/workflows" },
     { icon: Settings, label: "Settings", href: "/settings/integrations" },
   ];
+
+  const { jobs, cancelJob, retryJob, clearJobs } = useProcessingJobs();
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -110,6 +114,16 @@ export function AppLayout({ children }: AppLayoutProps) {
         <main className="flex-1 overflow-y-auto">
           {children}
         </main>
+
+        <ProcessingStatus
+          jobs={jobs}
+          onCancel={cancelJob}
+          onRetry={retryJob}
+          onClear={() => {
+            clearJobs();
+            toast.success("Notification list cleared");
+          }}
+        />
       </div>
     </div>
   );
