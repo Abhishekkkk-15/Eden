@@ -583,6 +583,16 @@ router.delete("/cloud/integrations/:id", async (req, res) => {
   }
 
   try {
+    // First delete any referencing rows in cloud_import_queue
+    await db
+      .delete(cloudImportQueueTable)
+      .where(
+        and(
+          eq(cloudImportQueueTable.integrationId, integrationId),
+          eq(cloudImportQueueTable.userId, user.id)
+        )
+      );
+
     await db
       .delete(cloudIntegrationsTable)
       .where(

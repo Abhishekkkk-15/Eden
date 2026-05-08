@@ -32,7 +32,7 @@ export const cloudIntegrationsTable = pgTable("cloud_integrations", {
 export const cloudImportQueueTable = pgTable("cloud_import_queue", {
   id: serial("id").primaryKey(),
   userId: text("user_id").references(() => usersTable.id).notNull(),
-  integrationId: integer("integration_id").references(() => cloudIntegrationsTable.id).notNull(),
+  integrationId: integer("integration_id").references(() => cloudIntegrationsTable.id, { onDelete: "cascade" }).notNull(),
   
   // File info from cloud provider
   providerFileId: text("provider_file_id").notNull(),
