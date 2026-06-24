@@ -7,7 +7,7 @@ import {
   GetPageParams,
   UpdatePageParams,
   DeletePageParams,
-} from "@workspace/api-zod";
+} from "../lib/validation";
 import { removeUploadedFile } from "../lib/source-media";
 
 const router: IRouter = Router();

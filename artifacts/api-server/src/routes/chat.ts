@@ -13,7 +13,7 @@ import {
   DeleteConversationParams,
   SendMessageParams,
   SendMessageBody,
-} from "@workspace/api-zod";
+} from "../lib/validation";
 import { buildContextFromSelection, buildRagContext } from "../lib/rag";
 import { streamChat } from "../lib/ai";
 

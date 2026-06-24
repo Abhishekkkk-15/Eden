@@ -9,7 +9,7 @@ import {
   UpdateSourceBody,
   UpdateSourceParams,
   DeleteSourceParams,
-} from "@workspace/api-zod";
+} from "../lib/validation";
 import { chunkText } from "../lib/rag";
 import { summarize, generateEmbedding } from "../lib/ai";
 import { pgvectorEnabled } from "../lib/embed-init";

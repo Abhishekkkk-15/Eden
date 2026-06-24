@@ -9,7 +9,7 @@ import {
   DeleteBlockParams,
   ReorderBlocksBody,
   ReorderBlocksParams,
-} from "@workspace/api-zod";
+} from "../lib/validation";
 
 const router: IRouter = Router();
 

@@ -8,7 +8,7 @@ import {
   DeleteAgentParams,
   RunAgentBody,
   RunAgentParams,
-} from "@workspace/api-zod";
+} from "../lib/validation";
 import { buildRagContext } from "../lib/rag";
 import { completeText } from "../lib/ai";
 

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { SearchWorkspaceQueryParams } from "@workspace/api-zod";
+import { SearchWorkspaceQueryParams } from "../lib/validation";
 import { searchWorkspace } from "../lib/rag";
 
 const router: IRouter = Router();

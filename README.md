@@ -44,7 +44,7 @@ Eden is a powerful, AI-driven workspace designed to help teams organize, search,
 
 ### Infrastructure
 *   **Monorepo Tooling**: pnpm Workspaces
-*   **API Specification**: OpenAPI (Zod-first generation)
+*   **Validation**: Hand-written Zod schemas in the API server
 *   **Containerization**: Docker & Docker Compose
 
 ## 📁 Project Structure
@@ -56,8 +56,6 @@ eden/
 │   └── api-server/      # Node.js Express API
 ├── lib/
 │   ├── api-client-react/# Generated React hooks for API
-│   ├── api-spec/        # OpenAPI/Swagger specifications
-│   ├── api-zod/         # Shared Zod schemas for validation
 │   ├── db/              # Drizzle schema and migrations
 │   └── integrations-*/  # Specialized AI/Cloud integration logic
 └── docker/              # Docker configuration files
