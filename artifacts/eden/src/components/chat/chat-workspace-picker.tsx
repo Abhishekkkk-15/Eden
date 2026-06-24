@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { useListPages, useListSources } from "@workspace/api-client-react";
+import { useListPages } from "@/hooks/use-pages";
+import { useListSources } from "@/hooks/use-sources";
 import {
   Dialog,
   DialogContent,

@@ -14,7 +14,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { useListPages, useCreatePage, getListPagesQueryKey } from "@workspace/api-client-react";
+import { useListPages, useCreatePage, getListPagesQueryKey } from "@/hooks/use-pages";
 import { CommandPalette } from "../command-palette";
 import { useQueryClient } from "@tanstack/react-query";
 import { ProcessingStatus, useProcessingJobs } from "../processing-status";

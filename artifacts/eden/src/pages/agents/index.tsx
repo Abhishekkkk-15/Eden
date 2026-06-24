@@ -1,11 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  useListAgents,
-  useCreateAgent,
-  getListAgentsQueryKey,
-} from "@workspace/api-client-react";
+import { useListAgents, useCreateAgent, getListAgentsQueryKey } from "@/hooks/use-agents";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";

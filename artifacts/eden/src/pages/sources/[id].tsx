@@ -1,4 +1,4 @@
-import { useGetSource, useDeleteSource, getGetSourceQueryKey, getListSourcesQueryKey } from "@workspace/api-client-react";
+import { useGetSource, useDeleteSource, getListSourcesQueryKey } from "@/hooks/use-sources";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Trash2, ArrowLeft } from "lucide-react";
@@ -11,7 +11,7 @@ import { format } from "date-fns";
 
 export default function SourceDetail({ params }: { params: { id: string } }) {
   const sourceId = parseInt(params.id);
-  const { data: source, isLoading } = useGetSource(sourceId, { query: { enabled: !!sourceId, queryKey: getGetSourceQueryKey(sourceId) } });
+  const { data: source, isLoading } = useGetSource(sourceId);
   const deleteSource = useDeleteSource();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();

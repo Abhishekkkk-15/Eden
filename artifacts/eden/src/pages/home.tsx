@@ -7,7 +7,9 @@ import {
   Activity,
   Plus
 } from "lucide-react";
-import { useGetDashboardSummary, useGetRecentActivity, useCreatePage, useCreateConversation } from "@workspace/api-client-react";
+import { useGetDashboardSummary, useGetRecentActivity } from "@/hooks/use-dashboard";
+import { useCreatePage, getListPagesQueryKey } from "@/hooks/use-pages";
+import { useCreateConversation, getListConversationsQueryKey } from "@/hooks/use-conversations";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,7 +27,7 @@ export default function Home() {
   const handleNewPage = () => {
     createPage.mutate({ data: { title: "Untitled" } }, {
       onSuccess: (p) => {
-        queryClient.invalidateQueries({ queryKey: ["/api/pages"] });
+        queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() });
         setLocation(`/pages/${p.id}`);
       }
     });
@@ -34,7 +36,7 @@ export default function Home() {
   const handleNewChat = () => {
     createConversation.mutate({ data: { title: "New Conversation" } }, {
       onSuccess: (c) => {
-        queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+        queryClient.invalidateQueries({ queryKey: getListConversationsQueryKey() });
         setLocation(`/chat/${c.id}`);
       }
     });

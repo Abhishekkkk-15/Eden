@@ -4,7 +4,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
 import { useEffect, useState } from "react";
-import { setAuthTokenGetter } from "@workspace/api-client-react";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 
 import NotFound from "@/pages/not-found";
@@ -28,9 +27,6 @@ import SignupPage from "@/pages/signup";
 import LandingPage from "@/pages/landing";
 
 const queryClient = new QueryClient();
-
-// Configure API client to use token from localStorage
-setAuthTokenGetter(() => localStorage.getItem("token"));
 
 function Router() {
   const [location, setLocation] = useLocation();

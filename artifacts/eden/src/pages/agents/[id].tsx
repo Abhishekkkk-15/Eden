@@ -7,8 +7,8 @@ import {
   useDeleteAgent,
   useRunAgent,
   getListAgentsQueryKey,
-  type Citation,
-} from "@workspace/api-client-react";
+} from "@/hooks/use-agents";
+import type { Citation } from "@/hooks/use-conversations";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

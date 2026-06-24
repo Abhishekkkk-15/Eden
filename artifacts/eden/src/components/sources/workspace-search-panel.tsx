@@ -1,8 +1,5 @@
 import { useState, useEffect } from "react";
-import {
-  useSearchWorkspace,
-  getSearchWorkspaceQueryKey,
-} from "@workspace/api-client-react";
+import { useSearchWorkspace } from "@/hooks/use-search";
 import { useLocation } from "wouter";
 import { Search as SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -55,12 +52,7 @@ export function WorkspaceSearchPanel() {
 
   const { data: results, isLoading } = useSearchWorkspace(
     { q: debouncedQuery },
-    {
-      query: {
-        enabled: !!debouncedQuery.trim(),
-        queryKey: getSearchWorkspaceQueryKey({ q: debouncedQuery }),
-      },
-    },
+    { enabled: !!debouncedQuery.trim() },
   );
 
   return (

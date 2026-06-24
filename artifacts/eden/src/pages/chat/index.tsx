@@ -3,9 +3,8 @@ import {
   useCreateConversation,
   useDeleteConversation,
   getListConversationsQueryKey,
-  getGetRecentActivityQueryKey,
-  getGetDashboardSummaryQueryKey,
-} from "@workspace/api-client-react";
+} from "@/hooks/use-conversations";
+import { getGetRecentActivityQueryKey, getGetDashboardSummaryQueryKey } from "@/hooks/use-dashboard";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { MessageSquare, Plus, Bot, Trash2 } from "lucide-react";

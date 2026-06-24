@@ -16,12 +16,10 @@ import {
   Keyboard,
   X
 } from "lucide-react";
-import { 
-  useListPages, 
-  useListSources, 
-  useListAgents,
-  useSearchWorkspace 
-} from "@workspace/api-client-react";
+import { useListPages } from "@/hooks/use-pages";
+import { useListSources } from "@/hooks/use-sources";
+import { useListAgents } from "@/hooks/use-agents";
+import { useSearchWorkspace } from "@/hooks/use-search";
 import { useDebounce } from "@/hooks/use-debounce";
 import { cn } from "@/lib/utils";
 
@@ -77,12 +75,7 @@ export function CommandPalette() {
   const { data: agents } = useListAgents();
   const { data: searchHits, isLoading: isSearching } = useSearchWorkspace(
     { q: debouncedQuery },
-    { 
-      query: { 
-        enabled: debouncedQuery.length > 2,
-        queryKey: ["search", debouncedQuery]
-      } 
-    }
+    { enabled: debouncedQuery.length > 2 },
   );
 
   const pageList = Array.isArray(pages) ? pages : [];

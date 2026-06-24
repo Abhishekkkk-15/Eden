@@ -55,7 +55,6 @@ eden/
 │   ├── eden/            # React Frontend (Vite)
 │   └── api-server/      # Node.js Express API
 ├── lib/
-│   ├── api-client-react/# Generated React hooks for API
 │   ├── db/              # Drizzle schema and migrations
 │   └── integrations-*/  # Specialized AI/Cloud integration logic
 └── docker/              # Docker configuration files

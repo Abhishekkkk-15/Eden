@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, Check, X, Loader2 } from "lucide-react";
-import { useListAgents } from "@workspace/api-client-react";
+import { useListAgents } from "@/hooks/use-agents";
 import { API_BASE_URL } from "@/config";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";

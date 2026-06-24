@@ -3,19 +3,20 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetPage,
   useUpdatePage,
+  useCreatePage,
+  useListPages,
+  getGetPageQueryKey,
+  type Page,
+} from "@/hooks/use-pages";
+import {
   useCreateBlock,
   useUpdateBlock,
   useDeleteBlock,
   useReorderBlocks,
-  useCreatePage,
-  useListPages,
-  useListSources,
-  getGetPageQueryKey,
   type Block,
   type BlockType,
-  type Page,
-  type Source,
-} from "@workspace/api-client-react";
+} from "@/hooks/use-blocks";
+import { useListSources, type Source } from "@/hooks/use-sources";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

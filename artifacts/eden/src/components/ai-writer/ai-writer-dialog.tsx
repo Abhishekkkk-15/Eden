@@ -32,7 +32,7 @@ import {
   Quote,
   Copy,
 } from "lucide-react";
-import { useListSources } from "@workspace/api-client-react";
+import { useListSources } from "@/hooks/use-sources";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { streamChat } from "@/lib/ai";

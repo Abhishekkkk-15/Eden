@@ -6,12 +6,11 @@ import {
   useDeleteConversation,
   getGetConversationQueryKey,
   getListConversationsQueryKey,
-  getGetRecentActivityQueryKey,
-  getGetDashboardSummaryQueryKey,
   type ChatContextItem,
   type Citation,
   type Message,
-} from "@workspace/api-client-react";
+} from "@/hooks/use-conversations";
+import { getGetRecentActivityQueryKey, getGetDashboardSummaryQueryKey } from "@/hooks/use-dashboard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";

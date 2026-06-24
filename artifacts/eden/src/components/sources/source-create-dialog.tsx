@@ -1,10 +1,6 @@
 import { ReactNode, useMemo, useState } from "react";
-import {
-  getListSourcesQueryKey,
-  useCreateSource,
-  useListPages,
-  type CreateSourceInputKind,
-} from "@workspace/api-client-react";
+import { getListSourcesQueryKey, useCreateSource, type SourceKind } from "@/hooks/use-sources";
+import { useListPages } from "@/hooks/use-pages";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,7 +41,7 @@ export function SourceCreateDialog({
   parentKinds = ["page", "folder"],
 }: SourceCreateDialogProps) {
   const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<CreateSourceInputKind>("text");
+  const [kind, setKind] = useState<SourceKind>("text");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [url, setUrl] = useState("");
@@ -130,7 +126,7 @@ export function SourceCreateDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Type</Label>
-            <Select value={kind} onValueChange={(val: CreateSourceInputKind) => setKind(val)}>
+            <Select value={kind} onValueChange={(val: SourceKind) => setKind(val)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="text">Text Snippet</SelectItem>

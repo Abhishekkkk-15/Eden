@@ -2,20 +2,21 @@ import { useMemo, useState, useCallback, useEffect } from "react";
 import { useSocket } from "@/providers/socket-provider";
 import {
   getListPagesQueryKey,
-  getListSourcesQueryKey,
   useCreatePage,
   useListPages,
-  useListSources,
   useUpdatePage,
   useDeletePage,
+  type Page,
+} from "@/hooks/use-pages";
+import {
+  getListSourcesQueryKey,
+  useListSources,
   useUpdateSource,
   useDeleteSource,
-  useSearchWorkspace,
-  getSearchWorkspaceQueryKey,
-  useListAgents,
-  type Page,
   type Source,
-} from "@workspace/api-client-react";
+} from "@/hooks/use-sources";
+import { useSearchWorkspace } from "@/hooks/use-search";
+import { useListAgents } from "@/hooks/use-agents";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_BASE_URL } from "@/config";
 import { Link, useLocation } from "wouter";
@@ -803,12 +804,7 @@ export default function SourcesList() {
 
   const { data: searchResults, isLoading: searchLoading } = useSearchWorkspace(
     { q: searchQuery },
-    {
-      query: {
-        enabled: !!searchQuery.trim(),
-        queryKey: getSearchWorkspaceQueryKey({ q: searchQuery }),
-      },
-    }
+    { enabled: !!searchQuery.trim() },
   );
 
   // Keyboard shortcuts
