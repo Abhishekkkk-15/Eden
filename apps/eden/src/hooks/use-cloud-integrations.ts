@@ -9,6 +9,7 @@ export interface CloudIntegration {
   isActive: boolean;
   lastSyncedAt: string | null;
   syncError: string | null;
+  syncSettings: Record<string, unknown> | null;
   createdAt: string;
 }
 

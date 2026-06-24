@@ -2,7 +2,7 @@
 
 Eden is a powerful, AI-driven workspace designed to help teams organize, search, and automate their data. Built on a modern monorepo architecture, Eden combines semantic search, autonomous agents, and smart workflows into a single, cohesive platform.
 
-![Eden Logo](artifacts/eden/public/favicon.svg)
+![Eden Logo](apps/eden/public/favicon.svg)
 
 ## 🚀 Key Features
 
@@ -51,10 +51,10 @@ Eden is a powerful, AI-driven workspace designed to help teams organize, search,
 
 ```text
 eden/
-├── artifacts/
+├── apps/
 │   ├── eden/            # React Frontend (Vite)
 │   └── api-server/      # Node.js Express API
-├── lib/
+├── packages/
 │   ├── db/              # Drizzle schema and migrations
 │   └── integrations-*/  # Specialized AI/Cloud integration logic
 └── docker/              # Docker configuration files

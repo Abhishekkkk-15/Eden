@@ -369,7 +369,7 @@ export default function IntegrationsSettings() {
                           <div className="flex items-center space-x-2 mr-2 border-r pr-4 border-muted">
                             <Switch
                               id={`minutes-toggle-${integration.id}`}
-                              checked={(integration.syncSettings as any)?.autoSyncMeetingMinutes === true}
+                              checked={(integration.syncSettings as { autoSyncMeetingMinutes?: boolean } | null)?.autoSyncMeetingMinutes === true}
                               onCheckedChange={(checked) => {
                                 updateSettings.mutate({
                                   id: integration.id,

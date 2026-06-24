@@ -4,16 +4,16 @@
   "files": [],
   "references": [
     {
-      "path": "./lib/db"
+      "path": "./packages/db"
     },
     {
-      "path": "./lib/integrations-openai-ai-server"
+      "path": "./packages/integrations-openai-ai-server"
     },
     {
-      "path": "./lib/integrations-groq-ai-server"
+      "path": "./packages/integrations-groq-ai-server"
     },
     {
-      "path": "./lib/integrations-cloudinary-ai-server"
+      "path": "./packages/integrations-cloudinary-ai-server"
     }
   ]
 }
