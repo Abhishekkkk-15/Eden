@@ -81,7 +81,7 @@ function toSourceResponse(row: SourceListRow) {
 async function fetchUrl(url: string): Promise<string> {
   const response = await fetch(url, {
     redirect: "follow",
-    headers: { "User-Agent": "EdenAIWorkspace/1.0 (+https://replit.com)" },
+    headers: { "User-Agent": "EdenAIWorkspace/1.0" },
   });
   if (!response.ok) {
     throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
