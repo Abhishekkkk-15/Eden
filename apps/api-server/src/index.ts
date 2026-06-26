@@ -1,12 +1,12 @@
 import "./load-env";
 import { createServer } from "http";
 import app from "./app";
-import { logger } from "./lib/logger";
-import { startJobQueueProcessor } from "./lib/job-queue";
-import { startCloudImportProcessor } from "./lib/cloud-import-processor";
-import { startNotionAgent } from "./lib/notion-agent";
-import { initEmbeddingExtension } from "./lib/embed-init";
-import { initSocket } from "./lib/socket";
+import { logger } from "./infrastructure/logger";
+import { startJobQueueProcessor } from "./workers/job-queue";
+import { startCloudImportProcessor } from "./workers/cloud-import";
+import { startNotionAgent } from "./workers/notion-agent";
+import { initEmbeddingExtension } from "./infrastructure/embed-init";
+import { initSocket } from "./infrastructure/socket";
 
 const rawPort = process.env["PORT"];
 
