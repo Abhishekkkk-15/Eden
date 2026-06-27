@@ -246,7 +246,6 @@ export function ProcessingStatus({
                       className="h-8 px-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full"
                       onClick={(e) => {
                         e.stopPropagation();
-                        console.log("[ProcessingStatus] Clear clicked");
                         onClear?.();
                       }}
                     >
@@ -274,7 +273,7 @@ export function ProcessingStatus({
                 {failedJobs.length > 0 && (
                   <>
                     {activeJobs.length > 0 && (
-                      <div className="px-3 py-1 bg-red-50 text-red-600 text-xs font-medium">
+                      <div className="px-3 py-1 bg-destructive/10 text-destructive text-xs font-medium">
                         Failed
                       </div>
                     )}
@@ -289,7 +288,7 @@ export function ProcessingStatus({
                   <>
                     {(activeJobs.length > 0 || failedJobs.length > 0) && (
                       <button
-                        className="w-full px-3 py-1 bg-green-50 text-green-600 text-xs font-medium flex items-center justify-between hover:bg-green-100"
+                        className="w-full px-3 py-1 bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium flex items-center justify-between hover:bg-green-500/20 transition-colors"
                         onClick={() => setIsExpanded(!isExpanded)}
                       >
                         <span>Completed ({completedJobs.length})</span>
