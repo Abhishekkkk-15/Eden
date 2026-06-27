@@ -59,21 +59,21 @@ interface PhotoFolderProps {
 function getFileIcon(kind: FolderItem["kind"]) {
   switch (kind) {
     case "document":
-      return <FileText className="w-8 h-8 text-blue-500" />;
+      return <FileText className="w-5 h-5 text-blue-500" />;
     case "image":
-      return <ImageIcon className="w-8 h-8 text-purple-500" />;
+      return <ImageIcon className="w-5 h-5 text-purple-500" />;
     case "video":
-      return <Film className="w-8 h-8 text-rose-500" />;
+      return <Film className="w-5 h-5 text-rose-500" />;
     case "youtube":
-      return <Youtube className="w-8 h-8 text-red-500" />;
+      return <Youtube className="w-5 h-5 text-red-500" />;
     case "url":
-      return <LinkIcon className="w-8 h-8 text-emerald-500" />;
+      return <LinkIcon className="w-5 h-5 text-emerald-500" />;
     case "audio":
-      return <FileAudio className="w-8 h-8 text-amber-500" />;
+      return <FileAudio className="w-5 h-5 text-amber-500" />;
     case "text":
-      return <FileCode className="w-8 h-8 text-cyan-500" />;
+      return <FileCode className="w-5 h-5 text-cyan-500" />;
     default:
-      return <File className="w-8 h-8 text-gray-500" />;
+      return <File className="w-5 h-5 text-muted-foreground" />;
   }
 }
 
@@ -81,21 +81,21 @@ function getFileIcon(kind: FolderItem["kind"]) {
 function getFileGradient(kind: FolderItem["kind"]) {
   switch (kind) {
     case "document":
-      return "from-blue-100 to-blue-200";
+      return "from-blue-500/10 to-blue-500/20";
     case "image":
-      return "from-purple-100 to-purple-200";
+      return "from-purple-500/10 to-purple-500/20";
     case "video":
-      return "from-rose-100 to-rose-200";
+      return "from-rose-500/10 to-rose-500/20";
     case "youtube":
-      return "from-red-100 to-red-200";
+      return "from-red-500/10 to-red-500/20";
     case "url":
-      return "from-emerald-100 to-emerald-200";
+      return "from-emerald-500/10 to-emerald-500/20";
     case "audio":
-      return "from-amber-100 to-amber-200";
+      return "from-amber-500/10 to-amber-500/20";
     case "text":
-      return "from-cyan-100 to-cyan-200";
+      return "from-cyan-500/10 to-cyan-500/20";
     default:
-      return "from-gray-100 to-gray-200";
+      return "from-muted to-muted/60";
   }
 }
 
@@ -177,7 +177,7 @@ export function PhotoFolder({
                 <motion.div
                   key={item.id}
                   className={cn(
-                    "absolute w-[100px] h-[75px] rounded-lg overflow-hidden shadow-lg border-2 border-white bg-white flex items-center justify-center cursor-pointer",
+                    "absolute w-[100px] h-[75px] rounded-lg overflow-hidden shadow-md border border-background/80 bg-card flex items-center justify-center cursor-pointer",
                     !hasThumbnail && `bg-gradient-to-br ${getFileGradient(item.kind)}`
                   )}
                   style={{ zIndex: index }}
@@ -238,7 +238,7 @@ export function PhotoFolder({
                   ) : (
                     <div className="flex flex-col items-center justify-center p-2">
                       {getFileIcon(item.kind)}
-                      <span className="text-[8px] text-gray-600 mt-1 truncate max-w-[80px] text-center leading-tight">
+                      <span className="text-[8px] text-muted-foreground mt-1 truncate max-w-[80px] text-center leading-tight">
                         {item.title}
                       </span>
                     </div>
@@ -250,13 +250,13 @@ export function PhotoFolder({
             {/* Empty state - show empty folder hint */}
             {displayItems.length === 0 && (
               <motion.div
-                className="absolute w-[100px] h-[75px] rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 border-2 border-dashed border-gray-300 flex items-center justify-center"
+                className="absolute w-[100px] h-[75px] rounded-lg bg-gradient-to-br from-muted to-muted/60 border-2 border-dashed border-border flex items-center justify-center"
                 variants={{
                   initial: { opacity: 0.5, scale: 0.9 },
                   hover: { opacity: 0.7, scale: 1 },
                 }}
               >
-                <span className="text-xs text-gray-400">Empty</span>
+                <span className="text-xs text-muted-foreground/60">Empty</span>
               </motion.div>
             )}
           </div>
@@ -264,7 +264,7 @@ export function PhotoFolder({
           {/* Large preview tooltip for images */}
           {previewItem?.thumbnailUrl && (
             <motion.div
-              className="absolute -top-[180px] left-1/2 -translate-x-1/2 w-[200px] h-[150px] rounded-xl overflow-hidden shadow-2xl border-2 border-white bg-white z-50"
+              className="absolute -top-[180px] left-1/2 -translate-x-1/2 w-[200px] h-[150px] rounded-xl overflow-hidden shadow-2xl border border-border bg-card z-50"
               initial={{ opacity: 0, y: 10, scale: 0.9 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.9 }}
@@ -413,7 +413,7 @@ export function PhotoFolder({
             </div>
 
             {/* Gradient overlay for depth */}
-            <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-muted/40 pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-br from-foreground/[0.03] via-transparent to-muted/30 pointer-events-none" />
           </motion.div>
         </motion.div>
       </div>
