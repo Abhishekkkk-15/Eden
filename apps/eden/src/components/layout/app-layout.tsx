@@ -54,10 +54,19 @@ export function AppLayout({ children }: AppLayoutProps) {
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-1.5 rounded-md text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors shrink-0"
+            className="group relative p-1.5 rounded-md text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors shrink-0"
             title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
           >
-            {sidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
+            {sidebarOpen ? (
+              <PanelLeftClose className="w-4 h-4" />
+            ) : (
+              <span className="relative block w-4 h-4">
+                <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover:opacity-0">
+                  <span className="w-4 h-4 rounded bg-gradient-to-br from-primary to-emerald-600 text-white flex items-center justify-center text-[9px] font-bold shadow-sm">E</span>
+                </span>
+                <PanelLeftOpen className="w-4 h-4 absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+              </span>
+            )}
           </button>
         </div>
 
