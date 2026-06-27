@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
-import { 
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -23,6 +23,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -749,6 +758,7 @@ export function CloudFileBrowser({
   const [isAIAnalysisOpen, setIsAIAnalysisOpen] = useState(false);
   const [isAICreateOpen, setIsAICreateOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [deleteConfirmFile, setDeleteConfirmFile] = useState<CloudFile | null>(null);
 
   const currentIntegration = integrations?.find(i => i.id === integrationId);
   const defaultMode = currentIntegration?.syncSettings?.defaultImportMode || "download";
@@ -834,12 +844,12 @@ export function CloudFileBrowser({
     }
   };
 
-  const handleDelete = async (file: CloudFile) => {
-    if (!confirm(`Are you sure you want to delete "${file.name}"?`)) return;
-    
+  const handleDelete = async () => {
+    if (!deleteConfirmFile) return;
     try {
-      await deleteFile.mutateAsync({ integrationId, fileId: file.id });
-      toast.success(`"${file.name}" deleted`);
+      await deleteFile.mutateAsync({ integrationId, fileId: deleteConfirmFile.id });
+      toast.success(`"${deleteConfirmFile.name}" deleted`);
+      setDeleteConfirmFile(null);
       refetch();
     } catch {
       toast.error("Failed to delete");
@@ -1056,7 +1066,7 @@ export function CloudFileBrowser({
                           file={file}
                           isGoogleDrive={isGoogleDrive}
                           onRename={() => openRenameDialog(file)}
-                          onDelete={() => handleDelete(file)}
+                          onDelete={() => setDeleteConfirmFile(file)}
                           onDownload={() => handleDownload(file)}
                           onAnalyze={() => openAIAnalysis(file)}
                           onImport={() => handleImport(file, false)}
@@ -1107,6 +1117,23 @@ export function CloudFileBrowser({
         onOpenChange={setIsSettingsOpen}
         integration={integrations?.find(i => i.id === integrationId)}
       />
+
+      <AlertDialog open={!!deleteConfirmFile} onOpenChange={(open) => { if (!open) setDeleteConfirmFile(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete from cloud?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{deleteConfirmFile?.name}&rdquo; will be permanently deleted from your cloud storage. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button variant="destructive" disabled={deleteFile.isPending} onClick={handleDelete}>
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
