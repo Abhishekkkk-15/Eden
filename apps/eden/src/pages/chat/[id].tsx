@@ -32,7 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Send, FileText, Database, Sparkles, FolderOpen, Trash2, Paperclip, X, WandSparkles } from "lucide-react";
+import { Send, FileText, Database, Sparkles, FolderOpen, Trash2, Paperclip, X, WandSparkles, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 
 function chatPostHeaders(): HeadersInit {
@@ -573,25 +573,44 @@ function MessageBubble({
   onCitationClick: (c: Citation) => void;
   isStreaming: boolean;
 }) {
+  const [copied, setCopied] = useState(false);
+
   if (role === "system") return null;
   const isUser = role === "user";
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div className={`max-w-[85%] ${isUser ? "items-end" : "items-start"} flex flex-col gap-2`}>
-        <div
-          className={`rounded-2xl px-4 py-2.5 whitespace-pre-wrap text-[15px] leading-relaxed ${
-            isUser
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-foreground"
-          }`}
-        >
-          {content}
-          {isStreaming && (
-            <span className="inline-block w-1.5 h-4 ml-0.5 align-middle bg-current/60 animate-pulse" />
-          )}
-          {!content && !isStreaming && (
-            <span className="text-muted-foreground italic">empty</span>
+        <div className="group relative">
+          <div
+            className={`rounded-2xl px-4 py-2.5 whitespace-pre-wrap text-[15px] leading-relaxed ${
+              isUser
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-foreground"
+            }`}
+          >
+            {content}
+            {isStreaming && (
+              <span className="inline-block w-1.5 h-4 ml-0.5 align-middle bg-current/60 animate-pulse" />
+            )}
+            {!content && !isStreaming && (
+              <span className="text-muted-foreground italic">empty</span>
+            )}
+          </div>
+          {!isStreaming && content && (
+            <button
+              onClick={handleCopy}
+              className="absolute -bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md bg-background border border-border shadow-sm text-muted-foreground hover:text-foreground"
+              title="Copy"
+            >
+              {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+            </button>
           )}
         </div>
         {isUser && contextItems.length > 0 && (
