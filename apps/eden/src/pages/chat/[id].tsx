@@ -92,8 +92,19 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
       setAttachments(msg.contextItems.map((item) => attachmentFromContextItem(item)));
       return;
     }
-    setAttachments([]);
-  }, [conversation?.id, conversation?.messages]);
+    // Check for a pre-fill attachment from "Chat about this source"
+    const prefillKey = `chat-prefill-${id}`;
+    const prefill = sessionStorage.getItem(prefillKey);
+    if (prefill) {
+      sessionStorage.removeItem(prefillKey);
+      try {
+        const item = JSON.parse(prefill) as { type: string; id: number; title: string };
+        setAttachments([{ key: `${item.type}-${item.id}`, apiType: item.type as "source", id: item.id, title: item.title }]);
+      } catch {}
+    } else {
+      setAttachments([]);
+    }
+  }, [conversation?.id, conversation?.messages, id]);
 
   useEffect(() => {
     if (scrollerRef.current) {

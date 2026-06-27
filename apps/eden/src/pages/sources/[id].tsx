@@ -1,7 +1,8 @@
 import { useGetSource, useDeleteSource, getListSourcesQueryKey } from "@/hooks/use-sources";
+import { useCreateConversation, getListConversationsQueryKey } from "@/hooks/use-conversations";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Trash2, ArrowLeft } from "lucide-react";
+import { Trash2, ArrowLeft, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,9 +24,23 @@ export default function SourceDetail({ params }: { params: { id: string } }) {
   const sourceId = parseInt(params.id);
   const { data: source, isLoading } = useGetSource(sourceId);
   const deleteSource = useDeleteSource();
+  const createConversation = useCreateConversation();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const handleChatAbout = () => {
+    createConversation.mutate(
+      { data: { title: source?.title ?? "New Conversation" } },
+      {
+        onSuccess: (c) => {
+          queryClient.invalidateQueries({ queryKey: getListConversationsQueryKey() });
+          sessionStorage.setItem(`chat-prefill-${c.id}`, JSON.stringify({ type: "source", id: sourceId, title: source?.title }));
+          setLocation(`/chat/${c.id}`);
+        },
+      },
+    );
+  };
 
   const handleDelete = () => {
     deleteSource.mutate({ id: sourceId }, {
@@ -64,6 +79,16 @@ export default function SourceDetail({ params }: { params: { id: string } }) {
             <span>{format(new Date(source.createdAt), "MMM d, yyyy")}</span>
           </div>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleChatAbout}
+          disabled={createConversation.isPending || source.status !== "ready"}
+          className="gap-1.5"
+        >
+          <MessageSquare className="w-4 h-4" />
+          Chat about this
+        </Button>
         <Button variant="destructive" size="icon" onClick={() => setDeleteOpen(true)} disabled={deleteSource.isPending}>
           <Trash2 className="w-4 h-4" />
         </Button>
