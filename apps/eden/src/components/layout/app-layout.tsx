@@ -5,8 +5,6 @@ import {
   Database,
   MessageSquare,
   Bot,
-  Plus,
-  FileText,
   PanelLeftClose,
   PanelLeftOpen,
   LogOut,
@@ -14,9 +12,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { useListPages, useCreatePage, getListPagesQueryKey } from "@/hooks/use-pages";
 import { CommandPalette } from "../command-palette";
-import { useQueryClient } from "@tanstack/react-query";
 import { ProcessingStatus, useProcessingJobs } from "../processing-status";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
@@ -27,27 +23,8 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { logout } = useAuth();
-  const [location, setLocation] = useLocation();
+  const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const { data: pages } = useListPages();
-  const pageList = Array.isArray(pages)
-    ? pages.filter((page) => page.kind === "page")
-    : [];
-  const createPage = useCreatePage();
-  const queryClient = useQueryClient();
-
-  const handleNewPage = () => {
-    createPage.mutate({ data: { title: "Untitled", kind: "page" } }, {
-      onSuccess: (p) => {
-        queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() });
-        setLocation(`/pages/${p.id}`);
-      }
-    });
-  };
-
-  const handleLogout = () => {
-    logout();
-  };
 
   const navItems = [
     { icon: Home, label: "Home", href: "/" },
@@ -120,7 +97,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <span>command palette</span>
             </div>
             <button
-              onClick={handleLogout}
+              onClick={logout}
               className="w-full flex items-center gap-3 px-2 py-1.5 rounded-md text-sm text-red-500 hover:bg-red-500/10 transition-colors"
             >
               <LogOut className="w-4 h-4" />
