@@ -893,13 +893,13 @@ export function CloudFileBrowser({
 
   if (error) {
     return (
-      <div className="h-full flex flex-col items-center justify-center p-8 text-center bg-red-50/20 rounded-2xl border border-red-100">
-        <Cloud className="w-16 h-16 text-red-400 mb-6" />
-        <h3 className="text-xl font-bold text-red-700 mb-2">Sync Error</h3>
+      <div className="h-full flex flex-col items-center justify-center p-8 text-center bg-destructive/5 rounded-2xl border border-destructive/20">
+        <Cloud className="w-16 h-16 text-destructive/50 mb-6" />
+        <h3 className="text-xl font-bold text-destructive mb-2">Sync Error</h3>
         <p className="text-muted-foreground text-sm max-w-xs mb-8">
           We encountered a problem connecting to your cloud storage account.
         </p>
-        <Button onClick={() => refetch()} variant="outline" className="rounded-full px-8 border-red-200 hover:bg-red-50 text-red-700">
+        <Button onClick={() => refetch()} variant="outline" className="rounded-full px-8 border-destructive/30 hover:bg-destructive/10 text-destructive">
           <RefreshCw className="w-4 h-4 mr-2" />
           Try Reconnecting
         </Button>

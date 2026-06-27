@@ -311,9 +311,9 @@ export function CloudImportDialog({ open, onOpenChange, targetPageId }: CloudImp
                                   variant={status.variant}
                                   className={cn(
                                     "px-4 py-1.5 text-[11px] font-bold rounded-full flex items-center gap-2 border shadow-sm",
-                                    item.status === "completed" && "bg-green-50 text-green-700 border-green-200",
-                                    item.status === "failed" && "bg-red-50 text-red-700 border-red-200",
-                                    item.status === "pending" && "bg-amber-50 text-amber-700 border-amber-200"
+                                    item.status === "completed" && "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
+                                    item.status === "failed" && "bg-destructive/10 text-destructive border-destructive/20",
+                                    item.status === "pending" && "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
                                   )}
                                 >
                                   <span className={cn(item.status === "processing" || item.status === "downloading" ? "animate-spin" : "")}>
@@ -325,8 +325,8 @@ export function CloudImportDialog({ open, onOpenChange, targetPageId }: CloudImp
                             </div>
                             
                             {item.errorMessage && (
-                              <div className="mt-4 p-4 bg-red-50/50 border border-red-100 rounded-2xl text-xs text-red-700 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                                <div className="bg-red-100 p-1 rounded-md shrink-0">
+                              <div className="mt-4 p-4 bg-destructive/5 border border-destructive/20 rounded-2xl text-xs text-destructive flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                                <div className="bg-destructive/15 p-1 rounded-md shrink-0">
                                   <RefreshCw className="h-3 w-3" />
                                 </div>
                                 <div className="flex-1">
