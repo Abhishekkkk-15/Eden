@@ -2,6 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   useListAgents,
   useUpdateAgent,
   useDeleteAgent,
@@ -38,6 +47,7 @@ export default function AgentDetail({ params }: { params: { id: string } }) {
   const [useContext, setUseContext] = useState(true);
   const [output, setOutput] = useState("");
   const [outputCitations, setOutputCitations] = useState<Citation[]>([]);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   useEffect(() => {
     if (agent) {
@@ -134,7 +144,7 @@ export default function AgentDetail({ params }: { params: { id: string } }) {
             </p>
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive">
+        <Button variant="ghost" size="sm" onClick={() => setDeleteOpen(true)} className="text-destructive">
           <Trash2 className="h-4 w-4 mr-2" /> Delete
         </Button>
       </div>
@@ -248,6 +258,23 @@ export default function AgentDetail({ params }: { params: { id: string } }) {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this agent?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{agent.name}&rdquo; will be permanently removed. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button variant="destructive" disabled={deleteAgent.isPending} onClick={handleDelete}>
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
