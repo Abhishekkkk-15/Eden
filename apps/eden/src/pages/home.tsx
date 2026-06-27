@@ -16,6 +16,13 @@ import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning.";
+  if (h < 17) return "Good afternoon.";
+  return "Good evening.";
+}
+
 export default function Home() {
   const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary();
   const { data: activity, isLoading: isLoadingActivity } = useGetRecentActivity();
@@ -45,7 +52,7 @@ export default function Home() {
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
       <header className="space-y-2">
-        <h1 className="text-3xl font-serif text-foreground tracking-tight">Good morning.</h1>
+        <h1 className="text-3xl font-serif text-foreground tracking-tight">{getGreeting()}</h1>
         <p className="text-muted-foreground">Ready to focus? Your workspace is waiting.</p>
       </header>
 
