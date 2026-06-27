@@ -7,8 +7,9 @@ import {
 import { getGetRecentActivityQueryKey, getGetDashboardSummaryQueryKey } from "@/hooks/use-dashboard";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { MessageSquare, Plus, Bot, Trash2 } from "lucide-react";
+import { MessageSquare, Plus, Bot, Trash2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
@@ -33,6 +34,7 @@ export default function ChatList() {
     id: number;
     title: string;
   } | null>(null);
+  const [search, setSearch] = useState("");
 
   const handleNewChat = () => {
     createConversation.mutate(
@@ -85,12 +87,23 @@ export default function ChatList() {
             <Plus className="w-4 h-4" />
           </Button>
         </div>
+        <div className="px-3 py-2 border-b border-border">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filter conversations…"
+              className="h-8 pl-8 text-xs bg-sidebar-accent/50 border-transparent focus-visible:border-border focus-visible:bg-background"
+            />
+          </div>
+        </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {isLoading ?
             Array.from({ length: 5 }).map((_, i) => (
               <Skeleton key={i} className="h-12 w-full rounded-md" />
             ))
-          : conversations?.map((c) => (
+          : conversations?.filter((c) => c.title.toLowerCase().includes(search.toLowerCase())).map((c) => (
               <div
                 key={c.id}
                 className="group flex items-stretch rounded-md transition-colors hover:bg-sidebar-accent">
