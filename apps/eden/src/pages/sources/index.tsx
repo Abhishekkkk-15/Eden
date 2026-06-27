@@ -1,4 +1,5 @@
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useSocket } from "@/providers/socket-provider";
 import {
   getListPagesQueryKey,
@@ -23,6 +24,7 @@ import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import {
   ChevronRight,
+  ChevronDown,
   Database,
   FileText,
   Film,
@@ -561,7 +563,7 @@ function MoveDialog({
   );
 }
 
-function CreateFolderDialog({ parentId }: { parentId: number | null }) {
+function CreateFolderDialog({ parentId, trigger }: { parentId: number | null; trigger?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const createPage = useCreatePage();
@@ -592,9 +594,11 @@ function CreateFolderDialog({ parentId }: { parentId: number | null }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline">
-          <Folder className="h-4 w-4 mr-1.5" /> New Folder
-        </Button>
+        {trigger ?? (
+          <Button variant="outline">
+            <Folder className="h-4 w-4 mr-1.5" /> New Folder
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -621,7 +625,7 @@ function CreateFolderDialog({ parentId }: { parentId: number | null }) {
   );
 }
 
-function CreateDocumentDialog({ parentId }: { parentId: number | null }) {
+function CreateDocumentDialog({ parentId, trigger }: { parentId: number | null; trigger?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const createPage = useCreatePage();
@@ -652,9 +656,11 @@ function CreateDocumentDialog({ parentId }: { parentId: number | null }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline">
-          <FileText className="h-4 w-4 mr-1.5" /> New Doc
-        </Button>
+        {trigger ?? (
+          <Button variant="outline">
+            <FileText className="h-4 w-4 mr-1.5" /> New Doc
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -681,22 +687,6 @@ function CreateDocumentDialog({ parentId }: { parentId: number | null }) {
   );
 }
 
-function CloudImportButton({ parentId }: { parentId: number | null }) {
-  const [open, setOpen] = useState(false);
-  
-  return (
-    <>
-      <Button variant="outline" onClick={() => setOpen(true)}>
-        <Cloud className="h-4 w-4 mr-1.5" /> Import from Cloud
-      </Button>
-      <CloudImportDialog 
-        open={open} 
-        onOpenChange={setOpen} 
-        targetPageId={parentId || undefined}
-      />
-    </>
-  );
-}
 
 /** Keep `q` (and other params) when opening folders or returning to root. */
 function sourcesPathForFolder(targetFolderId: number | null, clearSearch = true): string {
@@ -775,6 +765,21 @@ export default function SourcesList() {
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+
+  // Action menu state
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const [cloudImportOpen, setCloudImportOpen] = useState(false);
+  const actionMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(e.target as Node)) {
+        setActionMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const [folderId, setFolderId] = useState<number | null>(null);
   // Search state
@@ -1240,7 +1245,7 @@ export default function SourcesList() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <Button
                 variant="outline"
                 onClick={() => setIsSelectionMode(!isSelectionMode)}
@@ -1249,24 +1254,111 @@ export default function SourcesList() {
                 <CheckSquare className="h-4 w-4 mr-1.5" />
                 {isSelectionMode ? "Done" : "Select"}
               </Button>
-              <CreateFolderDialog parentId={folderId} />
-              <CreateDocumentDialog parentId={folderId} />
-              <SourceCreateDialog
-                defaultParentPageId={folderId}
-                lockParentPageId
-                parentKinds={["folder"]}
-                titleText={
-                  currentFolder ?
-                    `Add source to ${currentFolder.title}`
-                  : "Add source to My Drive"
-                }
-                trigger={
-                  <Button>
-                    <Plus className="h-4 w-4 mr-1.5" /> Add File
-                  </Button>
-                }
+
+              <div className="relative" ref={actionMenuRef}>
+                <Button
+                  variant="outline"
+                  onClick={() => setActionMenuOpen((v) => !v)}
+                  className={cn(actionMenuOpen && "border-primary/40 bg-primary/10 text-primary")}
+                >
+                  <Plus className={cn("h-4 w-4 mr-1.5 transition-transform duration-200", actionMenuOpen && "rotate-45")} />
+                  New
+                  <ChevronDown className={cn("ml-1.5 h-3 w-3 transition-transform duration-200", actionMenuOpen && "-rotate-180")} />
+                </Button>
+
+                <AnimatePresence>
+                  {actionMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: -6 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: -6 }}
+                      transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                      className="absolute right-0 top-full z-50 mt-2 min-w-[190px] overflow-hidden rounded-xl border border-border bg-popover p-1.5 shadow-xl"
+                    >
+                      {(
+                        [
+                          {
+                            icon: Folder,
+                            label: "New Folder",
+                            node: (
+                              <CreateFolderDialog
+                                parentId={folderId}
+                                trigger={
+                                  <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => setActionMenuOpen(false)}>
+                                    <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                    New Folder
+                                  </button>
+                                }
+                              />
+                            ),
+                          },
+                          {
+                            icon: FileText,
+                            label: "New Doc",
+                            node: (
+                              <CreateDocumentDialog
+                                parentId={folderId}
+                                trigger={
+                                  <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => setActionMenuOpen(false)}>
+                                    <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                    New Doc
+                                  </button>
+                                }
+                              />
+                            ),
+                          },
+                          {
+                            icon: Plus,
+                            label: "Add File",
+                            node: (
+                              <SourceCreateDialog
+                                defaultParentPageId={folderId}
+                                lockParentPageId
+                                parentKinds={["folder"]}
+                                titleText={currentFolder ? `Add source to ${currentFolder.title}` : "Add source to My Drive"}
+                                trigger={
+                                  <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => setActionMenuOpen(false)}>
+                                    <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                    Add File
+                                  </button>
+                                }
+                              />
+                            ),
+                          },
+                          {
+                            icon: Cloud,
+                            label: "Import from Cloud",
+                            node: (
+                              <button
+                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                                onClick={() => { setCloudImportOpen(true); setActionMenuOpen(false); }}
+                              >
+                                <Cloud className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                Import from Cloud
+                              </button>
+                            ),
+                          },
+                        ] as const
+                      ).map((item, i) => (
+                        <motion.div
+                          key={item.label}
+                          initial={{ opacity: 0, x: -6 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: i * 0.04, duration: 0.12, ease: "easeOut" }}
+                        >
+                          {item.node}
+                        </motion.div>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <CloudImportDialog
+                open={cloudImportOpen}
+                onOpenChange={setCloudImportOpen}
+                targetPageId={folderId ?? undefined}
               />
-              <CloudImportButton parentId={folderId} />
             </div>
           </div>
 
