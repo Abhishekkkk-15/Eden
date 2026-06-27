@@ -195,9 +195,8 @@ export default function WorkflowsList() {
                   </div>
                   <Switch
                     checked={workflow.isActive}
-                      onCheckedChange={(checked) => {
-                      handleToggleWorkflow(workflow.id, workflow.isActive);
-                    }}
+                    onCheckedChange={() => handleToggleWorkflow(workflow.id, workflow.isActive)}
+                    onClick={(e) => e.stopPropagation()}
                   />
                 </div>
               </CardHeader>
