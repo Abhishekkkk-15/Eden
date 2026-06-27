@@ -271,7 +271,7 @@ router.post("/sources", async (req, res) => {
             req.log.info({ sourceId: pending.id, kind: body.kind }, "transcription completed");
 
             // Trigger meeting minutes for audio uploads
-            if (body.kind === "audio") {
+            if (body.kind === "audio" && user.id && transcription) {
               void generateMeetingMinutes(user.id, pending.title, transcription);
             }
           } catch (txErr) {

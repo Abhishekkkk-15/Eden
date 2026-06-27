@@ -41,6 +41,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       };
     } else {
       console.log("[Socket] No user ID found, skipping connection");
+      return undefined;
     }
   }, [user?.id]);
 

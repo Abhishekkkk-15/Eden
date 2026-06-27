@@ -213,7 +213,7 @@ export async function generateMeetingMinutes(userId: string, sourceTitle: string
       }),
     });
 
-    const searchResult = await searchRes.json();
+    const searchResult = await searchRes.json() as { results?: Record<string, any>[] };
     let dbInfo = searchResult.results?.[0];
 
     if (!dbInfo) {
@@ -228,7 +228,7 @@ export async function generateMeetingMinutes(userId: string, sourceTitle: string
         },
         body: JSON.stringify({ filter: { property: "object", value: "page" }, page_size: 1 }),
       });
-      const pageSearchResult = await pageSearch.json();
+      const pageSearchResult = await pageSearch.json() as { results?: Record<string, any>[] };
       const parentPage = pageSearchResult.results?.[0];
 
       if (parentPage) {
@@ -248,7 +248,7 @@ export async function generateMeetingMinutes(userId: string, sourceTitle: string
             }
           }),
         });
-        dbInfo = await createRes.json();
+        dbInfo = await createRes.json() as Record<string, any>;
       }
     }
 
@@ -322,9 +322,9 @@ export async function generateMeetingMinutes(userId: string, sourceTitle: string
     });
 
     if (!pageRes.ok) {
-      const errorData = await pageRes.json();
+      const errorData = await pageRes.json() as { message?: string };
       console.error(`[NotionAgent] ❌ Notion Page Creation Failed:`, JSON.stringify(errorData, null, 2));
-      throw new Error(`Notion API error: ${errorData.message || "Unknown error"}`);
+      throw new Error(`Notion API error: ${errorData.message ?? "Unknown error"}`);
     }
 
     console.log(`[NotionAgent] ✓ Meeting minutes successfully synced to Notion for "${sourceTitle}"`);
