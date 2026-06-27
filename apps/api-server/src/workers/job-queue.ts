@@ -51,8 +51,9 @@ async function processJob(jobId: number) {
     .where(eq(jobQueueTable.id, jobId))
     .returning();
 
-  if (!job) return;
+  if (!job || !job.userId) return;
 
+  const { userId } = job;
   console.log(`[JobQueue] Starting job: ID=${jobId}, Type=${job.jobType}, Entity=${job.entityType}:${job.entityId}`);
 
   try {
@@ -74,7 +75,7 @@ async function processJob(jobId: number) {
       .update(jobQueueTable)
       .set({ status: "failed", errorMessage, completedAt: new Date(), updatedAt: new Date() })
       .where(eq(jobQueueTable.id, jobId));
-    emitToUser(job.userId, "job:failed", { jobId, error: errorMessage });
+    emitToUser(userId, "job:failed", { jobId, error: errorMessage });
     throw err; // Let BullMQ handle retries (attempts: 3, exponential backoff)
   }
 
@@ -82,7 +83,7 @@ async function processJob(jobId: number) {
     .update(jobQueueTable)
     .set({ status: "completed", progress: 100, completedAt: new Date(), updatedAt: new Date() })
     .where(eq(jobQueueTable.id, jobId));
-  emitToUser(job.userId, "job:completed", { jobId });
+  emitToUser(userId, "job:completed", { jobId });
 }
 
 /**
@@ -125,7 +126,7 @@ async function processTranscriptionJob(job: typeof jobQueueTable.$inferSelect) {
   await updateJobProgress(job.id, 100, "Complete");
 
   // Post-processing: Generate meeting minutes if user has Notion connected
-  if (source.kind === "audio" || source.kind === "video") {
+  if ((source.kind === "audio" || source.kind === "video") && job.userId) {
     console.log(`[JobQueue] Triggering Meeting Minutes automation for ${source.title} (User: ${job.userId})`);
     void generateMeetingMinutes(job.userId, source.title, transcription);
   }
@@ -377,7 +378,7 @@ async function updateJobProgress(jobId: number, progress: number, message: strin
     .where(eq(jobQueueTable.id, jobId))
     .returning();
 
-  if (updatedJob) {
+  if (updatedJob?.userId) {
     emitToUser(updatedJob.userId, "job:progress", {
       jobId,
       progress,
