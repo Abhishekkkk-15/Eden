@@ -1,10 +1,10 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { 
-  Home, 
-  Database, 
-  MessageSquare, 
-  Bot, 
+import {
+  Home,
+  Database,
+  MessageSquare,
+  Bot,
   Plus,
   FileText,
   PanelLeftClose,
@@ -18,6 +18,7 @@ import { useListPages, useCreatePage, getListPagesQueryKey } from "@/hooks/use-p
 import { CommandPalette } from "../command-palette";
 import { useQueryClient } from "@tanstack/react-query";
 import { ProcessingStatus, useProcessingJobs } from "../processing-status";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 
 interface AppLayoutProps {
@@ -84,24 +85,31 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
 
         <div className="flex-1 overflow-y-auto py-2">
-          <div className={`mb-4 space-y-1 ${sidebarOpen ? 'px-3' : 'px-1'}`}>
-            {navItems.map((item) => {
-              const isActive = location === item.href || (item.href === "/sources" && location.startsWith("/sources"));
-              return (
-                <Link key={item.href} href={item.href}>
-                  <div
-                    title={!sidebarOpen ? item.label : undefined}
-                    className={`flex items-center rounded-md text-sm cursor-pointer transition-colors
-                      ${sidebarOpen ? 'gap-3 px-2 py-1.5' : 'justify-center p-2'}
-                      ${isActive ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
-                  >
-                    <item.icon className="w-4 h-4 shrink-0" />
-                    {sidebarOpen && item.label}
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
+          <TooltipProvider delayDuration={200}>
+            <div className={`mb-4 space-y-1 ${sidebarOpen ? 'px-3' : 'px-1'}`}>
+              {navItems.map((item) => {
+                const isActive = location === item.href || (item.href === "/sources" && location.startsWith("/sources"));
+                const navItem = (
+                  <Link key={item.href} href={item.href}>
+                    <div
+                      className={`flex items-center rounded-md text-sm cursor-pointer transition-colors
+                        ${sidebarOpen ? 'gap-3 px-2 py-1.5' : 'justify-center p-2'}
+                        ${isActive ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
+                    >
+                      <item.icon className="w-4 h-4 shrink-0" />
+                      {sidebarOpen && item.label}
+                    </div>
+                  </Link>
+                );
+                return sidebarOpen ? navItem : (
+                  <Tooltip key={item.href}>
+                    <TooltipTrigger asChild>{navItem}</TooltipTrigger>
+                    <TooltipContent side="right">{item.label}</TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          </TooltipProvider>
         </div>
 
         {sidebarOpen && (
