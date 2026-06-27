@@ -143,7 +143,7 @@ export default function Home() {
                 ))
               ) : (
                 <>
-                  <div className="p-4 flex justify-between items-center group cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setLocation('/pages')}>
+                  <div className="p-4 flex justify-between items-center group cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setLocation('/sources')}>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground group-hover:text-foreground">
                       <FileText className="h-4 w-4" /> Pages
                     </div>
