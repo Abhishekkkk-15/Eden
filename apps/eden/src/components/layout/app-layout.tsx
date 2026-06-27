@@ -10,7 +10,10 @@ import {
   LogOut,
   Zap,
   Settings,
+  Sun,
+  Moon,
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useAuth } from "@/hooks/use-auth";
 import { CommandPalette } from "../command-palette";
 import { ProcessingStatus, useProcessingJobs } from "../processing-status";
@@ -23,6 +26,7 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { logout } = useAuth();
+  const { resolvedTheme, setTheme } = useTheme();
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -70,7 +74,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-2">
+        <div className="flex-1 overflow-y-auto py-2 flex flex-col">
           <TooltipProvider delayDuration={200}>
             <div className={`mb-4 space-y-1 ${sidebarOpen ? 'px-3' : 'px-1'}`}>
               {navItems.map((item) => {
@@ -95,6 +99,25 @@ export function AppLayout({ children }: AppLayoutProps) {
                 );
               })}
             </div>
+
+            {/* Theme toggle in collapsed rail */}
+            {!sidebarOpen && (
+              <div className="px-1 mt-auto">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+                      className="w-full flex justify-center p-2 rounded-md text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+                    >
+                      {resolvedTheme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    {resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            )}
           </TooltipProvider>
         </div>
 
@@ -104,6 +127,15 @@ export function AppLayout({ children }: AppLayoutProps) {
               <kbd className="bg-sidebar-accent px-1.5 py-0.5 rounded border border-sidebar-border shadow-sm">⌘</kbd>
               <kbd className="bg-sidebar-accent px-1.5 py-0.5 rounded border border-sidebar-border shadow-sm">K</kbd>
               <span>command palette</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+                className="flex items-center gap-3 px-2 py-1.5 rounded-md text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors flex-1"
+              >
+                {resolvedTheme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                <span>{resolvedTheme === "dark" ? "Light mode" : "Dark mode"}</span>
+              </button>
             </div>
             <button
               onClick={logout}
