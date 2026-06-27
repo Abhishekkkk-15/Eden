@@ -6,8 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useState } from "react";
 
 export default function SourceDetail({ params }: { params: { id: string } }) {
   const sourceId = parseInt(params.id);
@@ -15,18 +25,17 @@ export default function SourceDetail({ params }: { params: { id: string } }) {
   const deleteSource = useDeleteSource();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const handleDelete = () => {
-    if (confirm("Are you sure you want to delete this source?")) {
-      deleteSource.mutate({ id: sourceId }, {
-        onSuccess: () => {
-          toast.success("Source deleted");
-          queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
-          setLocation("/sources");
-        },
-        onError: () => toast.error("Failed to delete source")
-      });
-    }
+    deleteSource.mutate({ id: sourceId }, {
+      onSuccess: () => {
+        toast.success("Source deleted");
+        queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
+        setLocation("/sources");
+      },
+      onError: () => toast.error("Failed to delete source"),
+    });
   };
 
   if (isLoading) {
@@ -55,7 +64,7 @@ export default function SourceDetail({ params }: { params: { id: string } }) {
             <span>{format(new Date(source.createdAt), "MMM d, yyyy")}</span>
           </div>
         </div>
-        <Button variant="destructive" size="icon" onClick={handleDelete} disabled={deleteSource.isPending}>
+        <Button variant="destructive" size="icon" onClick={() => setDeleteOpen(true)} disabled={deleteSource.isPending}>
           <Trash2 className="w-4 h-4" />
         </Button>
       </div>
@@ -118,6 +127,23 @@ export default function SourceDetail({ params }: { params: { id: string } }) {
       )}
 
       {/* Indexed Content removed per user request */}
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this source?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{source.title}&rdquo; and all its indexed content will be permanently removed. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button variant="destructive" disabled={deleteSource.isPending} onClick={handleDelete}>
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
