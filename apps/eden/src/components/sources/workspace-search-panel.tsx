@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
-export function WorkspaceSearchPanel() {
+export function WorkspaceSearchPanel({ className }: { className?: string } = {}) {
   const searchParams = new URLSearchParams(window.location.search);
   const initialQ = searchParams.get("q") || "";
   const [query, setQuery] = useState(initialQ);
@@ -56,7 +57,7 @@ export function WorkspaceSearchPanel() {
   );
 
   return (
-    <div className="relative max-w-2xl">
+    <div className={cn("relative max-w-2xl", className)}>
       <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={query}

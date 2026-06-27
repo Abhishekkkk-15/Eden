@@ -1210,213 +1210,169 @@ export default function SourcesList() {
       className="min-h-full bg-gradient-to-b from-muted/30 via-background to-background"
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleRootDrop}>
-      <div className="mx-auto max-w-7xl px-8 py-8 space-y-8 animate-in fade-in duration-500">
-        <div className="rounded-2xl border border-border/60 bg-card/30 p-6 shadow-sm backdrop-blur-sm sm:p-8">
-          <div className="flex flex-wrap items-start justify-between gap-6">
-            <div className="flex min-w-0 flex-1 gap-4">
-              <div className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/12 text-primary shadow-inner sm:flex">
-                <HardDrive className="h-7 w-7" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+      <div className="mx-auto max-w-7xl px-6 py-5 space-y-5 animate-in fade-in duration-500">
+        {/* Slim header bar */}
+        <div className="flex items-center gap-3 border-b border-border/40 pb-5">
+          {/* Left: icon + breadcrumb + title */}
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
+              <HardDrive className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              {breadcrumbs.length > 1 && (
+                <div className="mb-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                   {breadcrumbs.map((crumb, index) => (
-                    <div
-                      key={`${crumb.id ?? "root"}-${index}`}
-                      className="flex items-center gap-2">
-                      {index > 0 ?
-                        <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-                      : null}
+                    <div key={`${crumb.id ?? "root"}-${index}`} className="flex items-center gap-1">
+                      {index > 0 && <ChevronRight className="h-3 w-3 shrink-0" />}
                       <button
                         type="button"
                         onClick={() => handleNavigate(crumb.id)}
-                        className="truncate text-left hover:text-foreground transition-colors">
+                        className="truncate text-left transition-colors hover:text-foreground"
+                      >
                         {crumb.title}
                       </button>
                     </div>
                   ))}
                 </div>
-                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
-                  {searchQuery.trim() ? `Search: ${searchQuery}` : (currentFolder ? currentFolder.title : "My Drive")}
-                </h1>
-                <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-muted-foreground">
-                  Organize folders, documents, and files in one library. Everything here can be
-                  searched and used in chat. Drag items to move them.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 sm:gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setIsSelectionMode(!isSelectionMode)}
-                className={cn(isSelectionMode && "bg-primary/10 text-primary")}
-              >
-                <CheckSquare className="h-4 w-4 mr-1.5" />
-                {isSelectionMode ? "Done" : "Select"}
-              </Button>
-
-              <div className="relative" ref={actionMenuRef}>
-                <Button
-                  variant="outline"
-                  onClick={() => setActionMenuOpen((v) => !v)}
-                  className={cn(actionMenuOpen && "border-primary/40 bg-primary/10 text-primary")}
-                >
-                  <Plus className={cn("h-4 w-4 mr-1.5 transition-transform duration-200", actionMenuOpen && "rotate-45")} />
-                  New
-                  <ChevronDown className={cn("ml-1.5 h-3 w-3 transition-transform duration-200", actionMenuOpen && "-rotate-180")} />
-                </Button>
-
-                <AnimatePresence>
-                  {actionMenuOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95, y: -6 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95, y: -6 }}
-                      transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                      className="absolute right-0 top-full z-50 mt-2 min-w-[190px] overflow-hidden rounded-xl border border-border bg-popover p-1.5 shadow-xl"
-                    >
-                      {(
-                        [
-                          {
-                            icon: Folder,
-                            label: "New Folder",
-                            node: (
-                              <CreateFolderDialog
-                                parentId={folderId}
-                                trigger={
-                                  <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => setActionMenuOpen(false)}>
-                                    <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                    New Folder
-                                  </button>
-                                }
-                              />
-                            ),
-                          },
-                          {
-                            icon: FileText,
-                            label: "New Doc",
-                            node: (
-                              <CreateDocumentDialog
-                                parentId={folderId}
-                                trigger={
-                                  <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => setActionMenuOpen(false)}>
-                                    <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                    New Doc
-                                  </button>
-                                }
-                              />
-                            ),
-                          },
-                          {
-                            icon: Plus,
-                            label: "Add File",
-                            node: (
-                              <SourceCreateDialog
-                                defaultParentPageId={folderId}
-                                lockParentPageId
-                                parentKinds={["folder"]}
-                                titleText={currentFolder ? `Add source to ${currentFolder.title}` : "Add source to My Drive"}
-                                trigger={
-                                  <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => setActionMenuOpen(false)}>
-                                    <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                    Add File
-                                  </button>
-                                }
-                              />
-                            ),
-                          },
-                          {
-                            icon: Cloud,
-                            label: "Import from Cloud",
-                            node: (
-                              <button
-                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                                onClick={() => { setCloudImportOpen(true); setActionMenuOpen(false); }}
-                              >
-                                <Cloud className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                Import from Cloud
-                              </button>
-                            ),
-                          },
-                        ] as const
-                      ).map((item, i) => (
-                        <motion.div
-                          key={item.label}
-                          initial={{ opacity: 0, x: -6 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: i * 0.04, duration: 0.12, ease: "easeOut" }}
-                        >
-                          {item.node}
-                        </motion.div>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              <CloudImportDialog
-                open={cloudImportOpen}
-                onOpenChange={setCloudImportOpen}
-                targetPageId={folderId ?? undefined}
-              />
+              )}
+              <h1 className="truncate text-base font-semibold text-foreground">
+                {searchQuery.trim() ? `"${searchQuery}"` : (currentFolder ? currentFolder.title : "My Drive")}
+              </h1>
             </div>
           </div>
 
-          <div className="mt-8 border-t border-border/50 pt-8">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Search workspace
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Full-text search across pages, sources, and chunks.
-            </p>
-            <div className="mt-4">
-              <WorkspaceSearchPanel />
+          {/* Center: search */}
+          <div className="hidden sm:block flex-1 max-w-sm">
+            <WorkspaceSearchPanel className="max-w-none" />
+          </div>
+
+          {/* Right: stats + actions */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {!searchQuery.trim() && (
+              <div className="hidden lg:flex items-center gap-1 text-xs text-muted-foreground mr-1">
+                <span>{childFolders.length} folders</span>
+                <span className="opacity-40">·</span>
+                <span>{childDocuments.length} docs</span>
+                <span className="opacity-40">·</span>
+                <span>{childFiles.length} files</span>
+              </div>
+            )}
+
+            <Button
+              variant="outline"
+              onClick={() => setIsSelectionMode(!isSelectionMode)}
+              className={cn(isSelectionMode && "bg-primary/10 text-primary")}
+            >
+              <CheckSquare className="h-4 w-4 mr-1.5" />
+              {isSelectionMode ? "Done" : "Select"}
+            </Button>
+
+            <div className="relative" ref={actionMenuRef}>
+              <Button
+                variant="outline"
+                onClick={() => setActionMenuOpen((v) => !v)}
+                className={cn(actionMenuOpen && "border-primary/40 bg-primary/10 text-primary")}
+              >
+                <Plus className={cn("h-4 w-4 mr-1.5 transition-transform duration-200", actionMenuOpen && "rotate-45")} />
+                New
+                <ChevronDown className={cn("ml-1.5 h-3 w-3 transition-transform duration-200", actionMenuOpen && "-rotate-180")} />
+              </Button>
+
+              <AnimatePresence>
+                {actionMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: -6 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -6 }}
+                    transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                    className="absolute right-0 top-full z-50 mt-2 min-w-[190px] overflow-hidden rounded-xl border border-border bg-popover p-1.5 shadow-xl"
+                  >
+                    {(
+                      [
+                        {
+                          label: "New Folder",
+                          node: (
+                            <CreateFolderDialog
+                              parentId={folderId}
+                              trigger={
+                                <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => setActionMenuOpen(false)}>
+                                  <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                  New Folder
+                                </button>
+                              }
+                            />
+                          ),
+                        },
+                        {
+                          label: "New Doc",
+                          node: (
+                            <CreateDocumentDialog
+                              parentId={folderId}
+                              trigger={
+                                <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => setActionMenuOpen(false)}>
+                                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                  New Doc
+                                </button>
+                              }
+                            />
+                          ),
+                        },
+                        {
+                          label: "Add File",
+                          node: (
+                            <SourceCreateDialog
+                              defaultParentPageId={folderId}
+                              lockParentPageId
+                              parentKinds={["folder"]}
+                              titleText={currentFolder ? `Add source to ${currentFolder.title}` : "Add source to My Drive"}
+                              trigger={
+                                <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => setActionMenuOpen(false)}>
+                                  <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                  Add File
+                                </button>
+                              }
+                            />
+                          ),
+                        },
+                        {
+                          label: "Import from Cloud",
+                          node: (
+                            <button
+                              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                              onClick={() => { setCloudImportOpen(true); setActionMenuOpen(false); }}
+                            >
+                              <Cloud className="h-4 w-4 shrink-0 text-muted-foreground" />
+                              Import from Cloud
+                            </button>
+                          ),
+                        },
+                      ] as const
+                    ).map((item, i) => (
+                      <motion.div
+                        key={item.label}
+                        initial={{ opacity: 0, x: -6 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.04, duration: 0.12, ease: "easeOut" }}
+                      >
+                        {item.node}
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
+
+            <CloudImportDialog
+              open={cloudImportOpen}
+              onOpenChange={setCloudImportOpen}
+              targetPageId={folderId ?? undefined}
+            />
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card className="border-border/80 bg-card/50 shadow-sm transition-shadow hover:shadow-md">
-            <CardContent className="flex items-center gap-4 p-5">
-              <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-                <Folder className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="text-2xl font-semibold tabular-nums">
-                  {childFolders.length}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Folders here
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-border/80 bg-card/50 shadow-sm transition-shadow hover:shadow-md">
-            <CardContent className="flex items-center gap-4 p-5">
-              <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-                <FileText className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="text-2xl font-semibold tabular-nums">
-                  {childDocuments.length}
-                </div>
-                <div className="text-sm text-muted-foreground">Documents</div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-border/80 bg-card/50 shadow-sm transition-shadow hover:shadow-md">
-            <CardContent className="flex items-center gap-4 p-5">
-              <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-                <Database className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="text-2xl font-semibold tabular-nums">
-                  {childFiles.length}
-                </div>
-                <div className="text-sm text-muted-foreground">Files</div>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Mobile search */}
+        <div className="sm:hidden">
+          <WorkspaceSearchPanel className="max-w-none" />
         </div>
 
         {isLoading ?
