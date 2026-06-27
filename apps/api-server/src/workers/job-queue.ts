@@ -1,5 +1,5 @@
 import { db, jobQueueTable, sourcesTable, transcriptionsTable, sourceChunksTable } from "@workspace/db";
-import { eq, and, asc, lte } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { summarize, completeText, extractEntities } from "../infrastructure/ai";
 import { transcribeSource, transcribeImage, transcribeVideoFrames } from "../modules/sources/transcription";
 import { generateMeetingMinutes } from "./notion-agent";
@@ -8,12 +8,7 @@ import { redis } from "../infrastructure/redis";
 import { AI_JOB_QUEUE } from "../infrastructure/queues";
 import { emitToUser } from "../infrastructure/socket";
 
-// Job processor configuration
-const JOB_POLL_INTERVAL = 5000; // Check for jobs every 5 seconds
 const MAX_CONCURRENT_JOBS = 3;
-
-// Track currently processing jobs
-const processingJobs = new Set<number>();
 
 /**
  * Start the job queue processor (BullMQ Worker)
@@ -50,112 +45,44 @@ export function startJobQueueProcessor(): () => void {
  * Process a single job
  */
 async function processJob(jobId: number) {
+  const [job] = await db
+    .update(jobQueueTable)
+    .set({ status: "processing", startedAt: new Date(), progress: 0, updatedAt: new Date() })
+    .where(eq(jobQueueTable.id, jobId))
+    .returning();
+
+  if (!job) return;
+
+  console.log(`[JobQueue] Starting job: ID=${jobId}, Type=${job.jobType}, Entity=${job.entityType}:${job.entityId}`);
+
   try {
-    // Mark job as processing
-    const [job] = await db
-      .update(jobQueueTable)
-      .set({
-        status: "processing",
-        startedAt: new Date(),
-        progress: 0,
-        updatedAt: new Date(),
-      })
-      .where(eq(jobQueueTable.id, jobId))
-      .returning();
-
-    if (!job) {
-      processingJobs.delete(jobId);
-      return;
-    }
-
-    console.log(`[JobQueue] >>> Starting job: ID=${jobId}, Type=${job.jobType}, Entity=${job.entityType}:${job.entityId}`);
-
-    let result: unknown;
-    let error: string | null = null;
-
-    try {
-      switch (job.jobType) {
-        case "transcribe":
-          result = await processTranscriptionJob(job);
-          break;
-        case "analyze_video":
-          result = await processVideoAnalysisJob(job);
-          break;
-        case "analyze_image":
-          result = await processImageAnalysisJob(job);
-          break;
-        case "extract_text":
-          result = await processTextExtractionJob(job);
-          break;
-        case "generate_summary":
-          result = await processSummaryJob(job);
-          break;
-        case "extract_entities":
-          result = await processEntityExtractionJob(job);
-          break;
-        case "ai_transform":
-          result = await processAITransformJob(job);
-          break;
-        case "import_url":
-          result = await processImportUrlJob(job);
-          break;
-        default:
-          throw new Error(`Unknown job type: ${job.jobType}`);
-      }
-    } catch (err) {
-      error = err instanceof Error ? err.message : "Unknown error";
-      console.error(`[JobQueue] Job ${jobId} failed:`, error);
-    }
-
-    // Update job status
-    if (error) {
-      // Check if we should retry
-      if (job.retryCount < job.maxRetries) {
-        await db
-          .update(jobQueueTable)
-          .set({
-            status: "pending",
-            retryCount: job.retryCount + 1,
-            errorMessage: error,
-            scheduledAt: new Date(Date.now() + Math.pow(2, job.retryCount) * 1000), // Exponential backoff
-            updatedAt: new Date(),
-          })
-          .where(eq(jobQueueTable.id, jobId))
-          .returning();
-      } else {
-        const [failedJob] = await db
-          .update(jobQueueTable)
-          .set({
-            status: "failed",
-            errorMessage: error,
-            completedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(jobQueueTable.id, jobId))
-          .returning();
-
-        if (failedJob) {
-          emitToUser(failedJob.userId, "job:failed", { jobId, error });
-        }
-      }
-    } else {
-      await db
-        .update(jobQueueTable)
-        .set({
-          status: "completed",
-          progress: 100,
-          completedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(jobQueueTable.id, jobId));
-
-      emitToUser(job.userId, "job:completed", { jobId });
+    switch (job.jobType) {
+      case "transcribe":       await processTranscriptionJob(job); break;
+      case "analyze_video":    await processVideoAnalysisJob(job); break;
+      case "analyze_image":    await processImageAnalysisJob(job); break;
+      case "extract_text":     await processTextExtractionJob(job); break;
+      case "generate_summary": await processSummaryJob(job); break;
+      case "extract_entities": await processEntityExtractionJob(job); break;
+      case "ai_transform":     await processAITransformJob(job); break;
+      case "import_url":       await processImportUrlJob(job); break;
+      default: throw new Error(`Unknown job type: ${job.jobType}`);
     }
   } catch (err) {
-    console.error(`[JobQueue] Critical error processing job ${jobId}:`, err);
-  } finally {
-    processingJobs.delete(jobId);
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    console.error(`[JobQueue] Job ${jobId} failed:`, errorMessage);
+    await db
+      .update(jobQueueTable)
+      .set({ status: "failed", errorMessage, completedAt: new Date(), updatedAt: new Date() })
+      .where(eq(jobQueueTable.id, jobId));
+    emitToUser(job.userId, "job:failed", { jobId, error: errorMessage });
+    throw err; // Let BullMQ handle retries (attempts: 3, exponential backoff)
   }
+
+  await db
+    .update(jobQueueTable)
+    .set({ status: "completed", progress: 100, completedAt: new Date(), updatedAt: new Date() })
+    .where(eq(jobQueueTable.id, jobId));
+  emitToUser(job.userId, "job:completed", { jobId });
 }
 
 /**

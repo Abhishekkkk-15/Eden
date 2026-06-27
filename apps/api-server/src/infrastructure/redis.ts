@@ -6,7 +6,4 @@ export const redis = new Redis(REDIS_URL, {
   maxRetriesPerRequest: null, // Required by BullMQ
 });
 
-export const pubClient = new Redis(REDIS_URL);
-export const subClient = pubClient.duplicate();
-
 console.log("[Redis] Client initialized");
