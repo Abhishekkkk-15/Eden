@@ -65,7 +65,6 @@ export function WorkspaceSearchPanel({ className }: { className?: string } = {})
         placeholder="Search pages, sources, and indexed content…"
         className="h-11 border-border/80 bg-background/80 pl-10 shadow-sm backdrop-blur-sm transition-shadow focus-visible:ring-2 focus-visible:ring-primary/20"
         aria-label="Search workspace"
-        autoFocus
       />
     </div>
   );
