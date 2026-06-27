@@ -15,6 +15,15 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import {
   Cloud,
@@ -92,6 +101,7 @@ export default function IntegrationsSettings() {
   const updateSettings = useUpdateCloudIntegrationSettings();
 
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
+  const [pendingDisconnect, setPendingDisconnect] = useState<{ id: number; provider: string } | null>(null);
 
   useEffect(() => {
     if (status === "connected" && provider) {
@@ -121,11 +131,11 @@ export default function IntegrationsSettings() {
     }
   };
 
-  const handleDisconnect = async (id: number, p: string) => {
-    const label = providerMeta[p as Provider]?.label ?? p;
-    if (!confirm(`Are you sure you want to disconnect ${label}?`)) return;
+  const handleDisconnect = async () => {
+    if (!pendingDisconnect) return;
     try {
-      await deleteIntegration.mutateAsync(id);
+      await deleteIntegration.mutateAsync(pendingDisconnect.id);
+      setPendingDisconnect(null);
       toast.success("Integration disconnected");
     } catch {
       toast.error("Failed to disconnect");
@@ -418,7 +428,7 @@ export default function IntegrationsSettings() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => handleDisconnect(integration.id, integration.provider)}
+                          onClick={() => setPendingDisconnect({ id: integration.id, provider: integration.provider })}
                           disabled={deleteIntegration.isPending}
                           title="Disconnect"
                         >
@@ -434,6 +444,25 @@ export default function IntegrationsSettings() {
           </div>
         )}
       </section>
+
+      <AlertDialog open={!!pendingDisconnect} onOpenChange={(open) => { if (!open) setPendingDisconnect(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect integration?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDisconnect && (
+                <>This will remove your {providerMeta[pendingDisconnect.provider as Provider]?.label ?? pendingDisconnect.provider} connection. You can reconnect at any time.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button variant="destructive" disabled={deleteIntegration.isPending} onClick={handleDisconnect}>
+              Disconnect
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
