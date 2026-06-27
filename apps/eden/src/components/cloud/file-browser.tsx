@@ -1046,7 +1046,7 @@ export function CloudFileBrowser({
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity rounded-full hover:bg-primary/10 hover:text-primary"
+                          className="h-8 w-8 p-0 opacity-50 group-hover:opacity-100 transition-opacity rounded-full hover:bg-primary/10 hover:text-primary"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleImport(file, defaultMode === "index");

@@ -157,10 +157,8 @@ export function CloudImportDialog({ open, onOpenChange, targetPageId }: CloudImp
             {/* Account Selector Section */}
             <div className="px-6 py-4 border-b bg-background/50 backdrop-blur-sm sticky top-0 z-10 shrink-0">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
-                    Source Account
-                  </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground shrink-0">Account</span>
                   <Select
                     value={selectedIntegrationId}
                     onValueChange={setSelectedIntegrationId}
@@ -221,26 +219,26 @@ export function CloudImportDialog({ open, onOpenChange, targetPageId }: CloudImp
                 </div>
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-center p-8 bg-muted/5">
-                  <div className="w-24 h-24 bg-muted/20 rounded-3xl flex items-center justify-center mb-8 animate-in zoom-in-95 duration-500 shadow-inner">
-                    <Cloud className="h-12 w-12 text-muted-foreground/30" />
+                  <div className="w-16 h-16 bg-muted/20 rounded-2xl flex items-center justify-center mb-5 animate-in zoom-in-95 duration-500 shadow-inner">
+                    <Cloud className="h-8 w-8 text-muted-foreground/30" />
                   </div>
-                  <h3 className="text-2xl font-black tracking-tight mb-3 text-foreground">
+                  <h3 className="text-lg font-semibold tracking-tight mb-2 text-foreground">
                     {activeIntegrations.length === 0
-                      ? "Connect your cloud library"
-                      : "Choose an account to browse"}
+                      ? "No cloud accounts connected"
+                      : "Select an account to browse"}
                   </h3>
-                  <p className="text-muted-foreground text-base max-w-md mx-auto mb-10 leading-relaxed">
+                  <p className="text-muted-foreground text-sm max-w-sm mx-auto mb-6 leading-relaxed">
                     {activeIntegrations.length === 0
-                      ? "Link your Google Drive or Dropbox to start importing research documents and media directly into your workspace."
-                      : "Select one of your connected cloud accounts from the dropdown menu to start exploring your files."}
+                      ? "Connect Google Drive or Dropbox in Settings → Integrations to start importing files."
+                      : "Pick a connected account from the dropdown above to browse and import files."}
                   </p>
                   {activeIntegrations.length === 0 && (
-                    <Button 
-                      size="lg" 
+                    <Button
+                      size="sm"
                       onClick={() => onOpenChange(false)}
-                      className="px-8 rounded-full shadow-xl hover:scale-105 transition-transform"
+                      className="px-6 rounded-full"
                     >
-                      <Settings className="h-5 w-5 mr-3" />
+                      <Settings className="h-4 w-4 mr-2" />
                       Go to Integrations
                     </Button>
                   )}
@@ -260,15 +258,15 @@ export function CloudImportDialog({ open, onOpenChange, targetPageId }: CloudImp
                     ))}
                   </div>
                 ) : queueItems?.length === 0 ? (
-                  <Card className="border-dashed bg-transparent shadow-none py-20 flex flex-col items-center border-muted-foreground/20">
-                    <div className="w-20 h-20 bg-muted/30 rounded-3xl flex items-center justify-center mb-6 shadow-inner">
-                      <Clock className="h-10 w-10 text-muted-foreground/30" />
+                  <Card className="border-dashed bg-transparent shadow-none py-16 flex flex-col items-center border-muted-foreground/20">
+                    <div className="w-12 h-12 bg-muted/30 rounded-2xl flex items-center justify-center mb-4 shadow-inner">
+                      <Clock className="h-6 w-6 text-muted-foreground/40" />
                     </div>
-                    <h3 className="text-xl font-bold mb-2">Queue is empty</h3>
-                    <p className="text-muted-foreground text-base max-w-xs text-center mb-8">
-                      Your recently imported files will show up here as they process.
+                    <h3 className="text-base font-semibold mb-1">Queue is empty</h3>
+                    <p className="text-muted-foreground text-sm max-w-xs text-center mb-5">
+                      Recently imported files will appear here as they process.
                     </p>
-                    <Button variant="outline" onClick={() => setActiveTab("browse")} className="rounded-full px-8 border-primary/20 hover:bg-primary/5">
+                    <Button variant="outline" size="sm" onClick={() => setActiveTab("browse")} className="rounded-full px-6 border-primary/20 hover:bg-primary/5">
                       <FolderOpen className="h-4 w-4 mr-2" />
                       Browse Files
                     </Button>
@@ -276,8 +274,8 @@ export function CloudImportDialog({ open, onOpenChange, targetPageId }: CloudImp
                 ) : (
                   <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-xs font-black text-muted-foreground uppercase tracking-widest">
-                        Recent Imports ({queueItems?.length || 0})
+                      <h3 className="text-xs font-medium text-muted-foreground">
+                        Recent imports &middot; {queueItems?.length || 0}
                       </h3>
                     </div>
                     {queueItems?.map((item) => {
