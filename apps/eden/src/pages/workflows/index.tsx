@@ -242,7 +242,7 @@ export default function WorkflowsList() {
 
       {!isLoading && workflows?.length === 0 && (
         <div className="text-center py-16 border border-dashed rounded-lg">
-          <Zap className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+          <Zap className="mx-auto h-8 w-8 text-muted-foreground/50 mb-3" />
           <h3 className="text-lg font-medium">No workflows yet</h3>
           <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
             Create workflows to automatically process, tag, and organize your sources
