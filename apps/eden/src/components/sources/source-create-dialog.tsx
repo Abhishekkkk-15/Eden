@@ -26,7 +26,9 @@ function fileToDataUrl(file: File): Promise<string> {
 }
 
 type SourceCreateDialogProps = {
-  trigger: ReactNode;
+  trigger?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   defaultParentPageId?: number | null;
   lockParentPageId?: boolean;
   titleText?: string;
@@ -35,12 +37,15 @@ type SourceCreateDialogProps = {
 
 export function SourceCreateDialog({
   trigger,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
   defaultParentPageId = null,
   lockParentPageId = false,
   titleText = "Add a new source",
   parentKinds = ["page", "folder"],
 }: SourceCreateDialogProps) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const [kind, setKind] = useState<SourceKind>("text");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -103,22 +108,22 @@ export function SourceCreateDialog({
 
       await queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
       toast.success("Source added");
-      setOpen(false);
+      handleOpenChange(false);
       resetForm();
     } catch {
       toast.error("Failed to add source");
     }
   };
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (controlledOnOpenChange) controlledOnOpenChange(nextOpen);
+    else setInternalOpen(nextOpen);
+    if (!nextOpen) resetForm();
+  };
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
-        if (!nextOpen) resetForm();
-      }}
-    >
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{titleText}</DialogTitle>

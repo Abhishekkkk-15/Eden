@@ -52,7 +52,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
@@ -563,8 +562,7 @@ function MoveDialog({
   );
 }
 
-function CreateFolderDialog({ parentId, trigger }: { parentId: number | null; trigger?: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+function CreateFolderDialog({ parentId, open, onOpenChange }: { parentId: number | null; open: boolean; onOpenChange: (open: boolean) => void }) {
   const [title, setTitle] = useState("");
   const createPage = useCreatePage();
   const queryClient = useQueryClient();
@@ -584,7 +582,7 @@ function CreateFolderDialog({ parentId, trigger }: { parentId: number | null; tr
         queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() }),
       ]);
       toast.success("Folder created");
-      setOpen(false);
+      onOpenChange(false);
       setTitle("");
     } catch {
       toast.error("Failed to create folder");
@@ -592,14 +590,7 @@ function CreateFolderDialog({ parentId, trigger }: { parentId: number | null; tr
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button variant="outline">
-            <Folder className="h-4 w-4 mr-1.5" /> New Folder
-          </Button>
-        )}
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setTitle(""); }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create folder</DialogTitle>
@@ -625,8 +616,7 @@ function CreateFolderDialog({ parentId, trigger }: { parentId: number | null; tr
   );
 }
 
-function CreateDocumentDialog({ parentId, trigger }: { parentId: number | null; trigger?: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+function CreateDocumentDialog({ parentId, open, onOpenChange }: { parentId: number | null; open: boolean; onOpenChange: (open: boolean) => void }) {
   const [title, setTitle] = useState("");
   const createPage = useCreatePage();
   const queryClient = useQueryClient();
@@ -646,7 +636,7 @@ function CreateDocumentDialog({ parentId, trigger }: { parentId: number | null; 
         queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() }),
       ]);
       toast.success("Document created");
-      setOpen(false);
+      onOpenChange(false);
       setTitle("");
     } catch {
       toast.error("Failed to create document");
@@ -654,14 +644,7 @@ function CreateDocumentDialog({ parentId, trigger }: { parentId: number | null; 
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button variant="outline">
-            <FileText className="h-4 w-4 mr-1.5" /> New Doc
-          </Button>
-        )}
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setTitle(""); }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create document</DialogTitle>
@@ -769,6 +752,9 @@ export default function SourcesList() {
   // Action menu state
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [cloudImportOpen, setCloudImportOpen] = useState(false);
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [createDocOpen, setCreateDocOpen] = useState(false);
+  const [sourceCreateOpen, setSourceCreateOpen] = useState(false);
   const actionMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1292,46 +1278,28 @@ export default function SourcesList() {
                         {
                           label: "New Folder",
                           node: (
-                            <CreateFolderDialog
-                              parentId={folderId}
-                              trigger={
-                                <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => setActionMenuOpen(false)}>
-                                  <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                  New Folder
-                                </button>
-                              }
-                            />
+                            <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => { setCreateFolderOpen(true); setActionMenuOpen(false); }}>
+                              <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                              New Folder
+                            </button>
                           ),
                         },
                         {
                           label: "New Doc",
                           node: (
-                            <CreateDocumentDialog
-                              parentId={folderId}
-                              trigger={
-                                <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => setActionMenuOpen(false)}>
-                                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                  New Doc
-                                </button>
-                              }
-                            />
+                            <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => { setCreateDocOpen(true); setActionMenuOpen(false); }}>
+                              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                              New Doc
+                            </button>
                           ),
                         },
                         {
                           label: "Add File",
                           node: (
-                            <SourceCreateDialog
-                              defaultParentPageId={folderId}
-                              lockParentPageId
-                              parentKinds={["folder"]}
-                              titleText={currentFolder ? `Add source to ${currentFolder.title}` : "Add source to My Drive"}
-                              trigger={
-                                <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => setActionMenuOpen(false)}>
-                                  <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                  Add File
-                                </button>
-                              }
-                            />
+                            <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => { setSourceCreateOpen(true); setActionMenuOpen(false); }}>
+                              <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
+                              Add File
+                            </button>
                           ),
                         },
                         {
@@ -1366,6 +1334,27 @@ export default function SourcesList() {
               open={cloudImportOpen}
               onOpenChange={setCloudImportOpen}
               targetPageId={folderId ?? undefined}
+            />
+
+            <CreateFolderDialog
+              parentId={folderId}
+              open={createFolderOpen}
+              onOpenChange={setCreateFolderOpen}
+            />
+
+            <CreateDocumentDialog
+              parentId={folderId}
+              open={createDocOpen}
+              onOpenChange={setCreateDocOpen}
+            />
+
+            <SourceCreateDialog
+              open={sourceCreateOpen}
+              onOpenChange={setSourceCreateOpen}
+              defaultParentPageId={folderId}
+              lockParentPageId
+              parentKinds={["folder"]}
+              titleText={currentFolder ? `Add source to ${currentFolder.title}` : "Add source to My Drive"}
             />
           </div>
         </div>
