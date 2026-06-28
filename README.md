@@ -4,6 +4,8 @@ Eden is a powerful, AI-driven workspace designed to help teams organize, search,
 
 ![Eden Logo](apps/eden/public/favicon.svg)
 
+
+
 ## 🚀 Key Features
 
 ### 🔍 Semantic Search & Discovery
