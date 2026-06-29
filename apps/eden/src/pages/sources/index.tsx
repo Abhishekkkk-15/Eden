@@ -41,6 +41,8 @@ import {
   CheckSquare,
   Cloud,
   Bot,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -113,6 +115,7 @@ function FolderCard({
   folderSources,
   assignedAgent,
   onAgentChange,
+  viewMode = "grid",
 }: {
   folder: Page;
   onOpen: () => void;
@@ -127,6 +130,7 @@ function FolderCard({
   folderSources: SourceWithPage[];
   assignedAgent?: { id: number; name: string; emoji: string; workflowId: number } | null;
   onAgentChange?: () => void;
+  viewMode?: "grid" | "list";
 }) {
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -217,28 +221,8 @@ function FolderCard({
     });
   }, [folderSources]);
 
-  return (
+  const folderDialogs = (
     <>
-      <PhotoFolder
-        items={folderItems}
-        title={folder.title}
-        emoji={folder.emoji}
-        onClick={onOpen}
-        onRename={() => setIsRenameOpen(true)}
-        onDelete={() => setIsDeleteOpen(true)}
-        onExport={() => setIsExportOpen(true)}
-        onAssignAgent={() => setIsAssignAgentOpen(true)}
-        agentBadge={assignedAgent ? `${assignedAgent.emoji || "✨"} ${assignedAgent.name}` : null}
-        isDragging={isDragging}
-        isDropTarget={isDropTarget || isDragOver}
-        draggable
-        onDragStart={handleDragStart}
-        onDragEnd={onDragEnd}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      />
-
       <CloudExportDialog
         open={isExportOpen}
         onOpenChange={setIsExportOpen}
@@ -301,6 +285,95 @@ function FolderCard({
       </Dialog>
     </>
   );
+
+  if (viewMode === "list") {
+    return (
+      <>
+        <div
+          draggable
+          onDragStart={handleDragStart as any}
+          onDragEnd={onDragEnd}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={cn(
+            "group flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent/50 transition-colors cursor-pointer",
+            isDragging && "opacity-50",
+            isDropTarget && "bg-primary/5 ring-1 ring-primary/20"
+          )}
+          onClick={onOpen}
+        >
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            {folder.emoji ? <span className="text-base leading-none">{folder.emoji}</span> : <Folder className="h-4 w-4" />}
+          </div>
+          <span className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">{folder.title}</span>
+          <span className="hidden sm:block w-24 shrink-0 text-xs text-muted-foreground">Folder</span>
+          <span className="hidden md:block w-36 shrink-0 text-xs text-muted-foreground">
+            {folderSources.length} {folderSources.length === 1 ? "item" : "items"}
+          </span>
+          {assignedAgent ? (
+            <span className="hidden lg:flex w-24 shrink-0 items-center gap-1 text-[10px] text-primary/80 truncate">
+              <Bot className="h-3 w-3 shrink-0" />{assignedAgent.name}
+            </span>
+          ) : (
+            <div className="hidden lg:block w-24 shrink-0" />
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreVertical className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setIsAssignAgentOpen(true); }}>
+                <Bot className="h-4 w-4 mr-2 text-primary" />Assign Agent
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setIsRenameOpen(true); }}>
+                <Pencil className="h-4 w-4 mr-2" />Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setIsExportOpen(true); }}>
+                <Cloud className="h-4 w-4 mr-2 text-blue-500" />Export to Cloud
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e) => { e.stopPropagation(); setIsDeleteOpen(true); }}>
+                <Trash2 className="h-4 w-4 mr-2" />Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        {folderDialogs}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PhotoFolder
+        items={folderItems}
+        title={folder.title}
+        emoji={folder.emoji}
+        onClick={onOpen}
+        onRename={() => setIsRenameOpen(true)}
+        onDelete={() => setIsDeleteOpen(true)}
+        onExport={() => setIsExportOpen(true)}
+        onAssignAgent={() => setIsAssignAgentOpen(true)}
+        agentBadge={assignedAgent ? `${assignedAgent.emoji || "✨"} ${assignedAgent.name}` : null}
+        isDragging={isDragging}
+        isDropTarget={isDropTarget || isDragOver}
+        draggable
+        onDragStart={handleDragStart}
+        onDragEnd={onDragEnd}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      />
+      {folderDialogs}
+    </>
+  );
 }
 
 function SourceCard({
@@ -311,6 +384,7 @@ function SourceCard({
   isSelected,
   onSelect,
   isSelectionMode,
+  viewMode = "grid",
 }: {
   source: SourceWithPage;
   onRename: (newTitle: string) => void;
@@ -319,6 +393,7 @@ function SourceCard({
   isSelected?: boolean;
   onSelect?: () => void;
   isSelectionMode?: boolean;
+  viewMode?: "grid" | "list";
 }) {
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -345,6 +420,106 @@ function SourceCard({
 
   const linkHref = isPage ? `/pages/${source.id}` : `/sources/${source.id}`;
   const itemLabel = isPage ? "Document" : source.kind;
+
+  const sourceDialogs = (
+    <>
+      <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename {isPage ? "document" : "file"}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleRename} className="space-y-4">
+            <Input
+              value={renameTitle}
+              onChange={(e) => setRenameTitle(e.target.value)}
+              placeholder={isPage ? "Document name" : "File name"}
+              autoFocus
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsRenameOpen(false)}>Cancel</Button>
+              <Button type="submit">Rename</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {isPage ? "document" : "file"}</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{source.title}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsDeleteOpen(false)}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={onDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <MoveDialog open={isMoveOpen} onOpenChange={setIsMoveOpen} currentFolderId={source.parentPageId} onMove={onMove} />
+      <CloudExportDialog open={isExportOpen} onOpenChange={setIsExportOpen} sourceId={source.id} isPage={isPage} fileName={source.title} />
+    </>
+  );
+
+  if (viewMode === "list") {
+    return (
+      <>
+        <div
+          draggable
+          onDragStart={handleDragStart}
+          className={cn(
+            "group flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent/50 transition-colors",
+            isSelected && "bg-primary/5"
+          )}
+        >
+          {(isSelectionMode || isSelected) && onSelect && (
+            <Checkbox checked={isSelected} onCheckedChange={onSelect} className="h-4 w-4 shrink-0" />
+          )}
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted/50 text-muted-foreground">
+            {getSourceIcon(source.kind, isPage)}
+          </div>
+          <Link href={linkHref} className="flex-1 min-w-0">
+            <span className="text-sm font-medium text-foreground hover:underline truncate block">{source.title}</span>
+          </Link>
+          <span className="hidden sm:block w-24 shrink-0 text-xs text-muted-foreground capitalize">{itemLabel}</span>
+          <span className="hidden md:block w-36 shrink-0 text-xs text-muted-foreground">
+            {format(new Date(source.createdAt), "MMM d, yyyy")}
+          </span>
+          {!isPage ? (
+            <Badge variant={source.status === "ready" ? "secondary" : "outline"} className="hidden lg:flex w-20 justify-center shrink-0 text-xs">
+              {source.status}
+            </Badge>
+          ) : (
+            <div className="hidden lg:block w-20 shrink-0" />
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <MoreVertical className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setIsMoveOpen(true)}>
+                <FolderOpen className="h-4 w-4 mr-2" />Move to...
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsExportOpen(true)}>
+                <Cloud className="h-4 w-4 mr-2 text-blue-500" />Export to Cloud
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsRenameOpen(true)}>
+                <Pencil className="h-4 w-4 mr-2" />Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setIsDeleteOpen(true)}>
+                <Trash2 className="h-4 w-4 mr-2" />Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        {sourceDialogs}
+      </>
+    );
+  }
 
   return (
     <>
@@ -434,62 +609,7 @@ function SourceCard({
           </CardContent>
         </Card>
       </div>
-
-      <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rename {isPage ? "document" : "file"}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleRename} className="space-y-4">
-            <Input
-              value={renameTitle}
-              onChange={(e) => setRenameTitle(e.target.value)}
-              placeholder={isPage ? "Document name" : "File name"}
-              autoFocus
-            />
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsRenameOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit">Rename</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete {isPage ? "document" : "file"}</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete "{source.title}"? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsDeleteOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" variant="destructive" onClick={onDelete}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <MoveDialog
-        open={isMoveOpen}
-        onOpenChange={setIsMoveOpen}
-        currentFolderId={source.parentPageId}
-        onMove={onMove}
-      />
-
-      <CloudExportDialog
-        open={isExportOpen}
-        onOpenChange={setIsExportOpen}
-        sourceId={source.id}
-        isPage={isPage}
-        fileName={source.title}
-      />
+      {sourceDialogs}
     </>
   );
 }
@@ -752,6 +872,9 @@ export default function SourcesList() {
   // Action menu state
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [cloudImportOpen, setCloudImportOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() =>
+    (localStorage.getItem("sources-view") as "grid" | "list") ?? "grid"
+  );
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [createDocOpen, setCreateDocOpen] = useState(false);
   const [sourceCreateOpen, setSourceCreateOpen] = useState(false);
@@ -1245,6 +1368,19 @@ export default function SourcesList() {
             )}
 
             <Button
+              variant="ghost"
+              size="icon"
+              title={viewMode === "grid" ? "Switch to list view" : "Switch to grid view"}
+              onClick={() => {
+                const next = viewMode === "grid" ? "list" : "grid";
+                setViewMode(next);
+                localStorage.setItem("sources-view", next);
+              }}
+            >
+              {viewMode === "grid" ? <List className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
+            </Button>
+
+            <Button
               variant="outline"
               onClick={() => setIsSelectionMode(!isSelectionMode)}
               className={cn(isSelectionMode && "bg-primary/10 text-primary")}
@@ -1385,13 +1521,25 @@ export default function SourcesList() {
               </div>
             </CardContent>
           </Card>
-        : <div className="space-y-8">
+        : <div className="space-y-6">
+            {/* List view column header */}
+            {viewMode === "list" && (
+              <div className="flex items-center gap-3 px-3 py-1.5 text-xs font-medium text-muted-foreground border-b border-border/60 select-none">
+                <div className="w-8 shrink-0" />
+                <span className="flex-1">Name</span>
+                <span className="hidden sm:block w-24 shrink-0">Kind</span>
+                <span className="hidden md:block w-36 shrink-0">Date modified</span>
+                <span className="hidden lg:block w-20 shrink-0">Status</span>
+                <div className="w-7 shrink-0" />
+              </div>
+            )}
+
             {childFolders.length > 0 ?
               <section>
-                <div className="mb-4 text-sm font-medium text-muted-foreground">
-                  Folders
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {viewMode === "grid" && (
+                  <div className="mb-4 text-sm font-medium text-muted-foreground">Folders</div>
+                )}
+                <div className={viewMode === "grid" ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-4" : "space-y-0.5"}>
                   {childFolders.map((folder) => (
                     <FolderCard
                       key={folder.id}
@@ -1403,14 +1551,12 @@ export default function SourcesList() {
                       isDragging={draggingId === folder.id}
                       isDropTarget={dropTargetId === folder.id}
                       onDragStart={() => setDraggingId(folder.id)}
-                      onDragEnd={() => {
-                        setDraggingId(null);
-                        setDropTargetId(null);
-                      }}
+                      onDragEnd={() => { setDraggingId(null); setDropTargetId(null); }}
                       previewItems={folderPreviewMap.get(folder.id) ?? []}
                       folderSources={folderSourcesMap.get(folder.id) ?? []}
                       assignedAgent={folderAgentMap.get(folder.id) ?? null}
                       onAgentChange={() => refetchFolderAgents()}
+                      viewMode={viewMode}
                     />
                   ))}
                 </div>
@@ -1419,10 +1565,10 @@ export default function SourcesList() {
 
             {childDocuments.length > 0 ?
               <section>
-                <div className="mb-4 text-sm font-medium text-muted-foreground">
-                  Documents
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {viewMode === "grid" && (
+                  <div className="mb-4 text-sm font-medium text-muted-foreground">Documents</div>
+                )}
+                <div className={viewMode === "grid" ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-4" : "space-y-0.5"}>
                   {childDocuments.map((doc) => (
                     <SourceCard
                       key={doc.id}
@@ -1433,6 +1579,7 @@ export default function SourcesList() {
                       isSelected={selectedIds.has(doc.id)}
                       onSelect={() => toggleSelection(doc.id)}
                       isSelectionMode={isSelectionMode}
+                      viewMode={viewMode}
                     />
                   ))}
                 </div>
@@ -1441,10 +1588,10 @@ export default function SourcesList() {
 
             {childFiles.length > 0 ?
               <section>
-                <div className="mb-4 text-sm font-medium text-muted-foreground">
-                  Files
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {viewMode === "grid" && (
+                  <div className="mb-4 text-sm font-medium text-muted-foreground">Files</div>
+                )}
+                <div className={viewMode === "grid" ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-4" : "space-y-0.5"}>
                   {childFiles.map((source) => (
                     <SourceCard
                       key={source.id}
@@ -1455,6 +1602,7 @@ export default function SourcesList() {
                       isSelected={selectedIds.has(source.id)}
                       onSelect={() => toggleSelection(source.id)}
                       isSelectionMode={isSelectionMode}
+                      viewMode={viewMode}
                     />
                   ))}
                 </div>
