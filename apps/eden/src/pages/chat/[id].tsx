@@ -86,25 +86,43 @@ export default function ChatDetail({ params }: { params: { id: string } }) {
     return [...persisted, ...pending];
   }, [conversation?.messages, pending]);
 
+  // Track whether we've already consumed the sessionStorage prefill for this conversation.
+  // Without this, the effect runs twice (once while conversation is loading, once after it
+  // loads), and the second run clears the attachment because the sessionStorage key is gone.
+  const prefillInitialized = useRef(false);
+
+  useEffect(() => {
+    // Reset when navigating to a different conversation
+    prefillInitialized.current = false;
+  }, [id]);
+
   useEffect(() => {
     const persisted = conversation?.messages ?? [];
+
+    // Restore context from the most recent user message that has attachments
     for (let i = persisted.length - 1; i >= 0; i--) {
       const msg = persisted[i]!;
       if (msg.role !== "user" || !msg.contextItems || msg.contextItems.length === 0) continue;
       setAttachments(msg.contextItems.map((item) => attachmentFromContextItem(item)));
       return;
     }
-    // Check for a pre-fill attachment from "Chat about this source"
-    const prefillKey = `chat-prefill-${id}`;
-    const prefill = sessionStorage.getItem(prefillKey);
-    if (prefill) {
-      sessionStorage.removeItem(prefillKey);
-      try {
-        const item = JSON.parse(prefill) as { type: string; id: number; title: string };
-        setAttachments([{ key: `${item.type}-${item.id}`, apiType: item.type as "source", id: item.id, title: item.title }]);
-      } catch {}
-    } else {
-      setAttachments([]);
+
+    // For a brand-new conversation check for a pre-fill from "Chat about this source".
+    // Only do this once — the key is removed after first read and we must not overwrite
+    // the attachment on subsequent re-runs of this effect (e.g. when conversation loads).
+    if (!prefillInitialized.current) {
+      prefillInitialized.current = true;
+      const prefillKey = `chat-prefill-${id}`;
+      const prefill = sessionStorage.getItem(prefillKey);
+      if (prefill) {
+        sessionStorage.removeItem(prefillKey);
+        try {
+          const item = JSON.parse(prefill) as { type: string; id: number; title: string };
+          setAttachments([{ key: `${item.type}-${item.id}`, apiType: item.type as "source", id: item.id, title: item.title }]);
+        } catch {}
+      } else {
+        setAttachments([]);
+      }
     }
   }, [conversation?.id, conversation?.messages, id]);
 
