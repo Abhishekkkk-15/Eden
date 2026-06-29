@@ -14,14 +14,59 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 
-function fileToDataUrl(file: File): Promise<string> {
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000/api";
+
+function authHeaders(): HeadersInit {
+  const token = localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function cloudinaryResourceType(mimeType: string): "image" | "video" {
+  if (mimeType.startsWith("image/")) return "image";
+  return "video"; // Cloudinary uses "video" for both video and audio
+}
+
+async function uploadToCloudinary(
+  file: File,
+  onProgress: (pct: number) => void,
+): Promise<{ url: string; mimeType: string; sizeBytes: number }> {
+  const sigRes = await fetch(`${API_BASE_URL}/uploads/sign`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+  });
+  if (!sigRes.ok) throw new Error("Failed to get upload signature");
+  const { signature, timestamp, apiKey, cloudName, folder } = await sigRes.json();
+
+  const resourceType = cloudinaryResourceType(file.type);
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("api_key", apiKey);
+  formData.append("timestamp", String(timestamp));
+  formData.append("signature", signature);
+  formData.append("folder", folder);
+
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
-    reader.readAsDataURL(file);
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const result = JSON.parse(xhr.responseText);
+        resolve({ url: result.secure_url, mimeType: file.type, sizeBytes: result.bytes });
+      } else {
+        reject(new Error(`Cloudinary upload failed (${xhr.status})`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Upload failed — check your connection"));
+    xhr.send(formData);
   });
 }
 
@@ -51,11 +96,11 @@ export function SourceCreateDialog({
   const [content, setContent] = useState("");
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [parentPageId, setParentPageId] = useState<string>(
     defaultParentPageId == null ? "__root__" : String(defaultParentPageId),
   );
 
-  // Sync state when prop changes (e.g. after navigation)
   useMemo(() => {
     setParentPageId(defaultParentPageId == null ? "__root__" : String(defaultParentPageId));
   }, [defaultParentPageId]);
@@ -76,20 +121,31 @@ export function SourceCreateDialog({
     setContent("");
     setUrl("");
     setFile(null);
+    setUploadProgress(null);
     setParentPageId(defaultParentPageId == null ? "__root__" : String(defaultParentPageId));
   };
+
+  const isUploading = uploadProgress !== null && uploadProgress < 100;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
-      let fileDataUrl: string | undefined;
+      let mediaUrl: string | undefined;
+      let mediaMimeType: string | undefined;
+      let mediaSizeBytes: number | undefined;
+
       if (kind === "image" || kind === "video" || kind === "audio") {
         if (!file) {
           toast.error("Select a file to upload");
           return;
         }
-        fileDataUrl = await fileToDataUrl(file);
+        setUploadProgress(0);
+        const result = await uploadToCloudinary(file, setUploadProgress);
+        mediaUrl = result.url;
+        mediaMimeType = result.mimeType;
+        mediaSizeBytes = result.sizeBytes;
+        setUploadProgress(100);
       }
 
       await createSource.mutateAsync({
@@ -98,11 +154,11 @@ export function SourceCreateDialog({
           title,
           content: kind === "text" ? content : undefined,
           url: kind === "url" || kind === "youtube" ? url : undefined,
-          parentPageId:
-            parentPageId === "__root__" ? null : Number(parentPageId),
-          fileDataUrl,
+          parentPageId: parentPageId === "__root__" ? null : Number(parentPageId),
+          mediaUrl,
           originalFilename: file?.name,
-          mediaMimeType: file?.type,
+          mediaMimeType,
+          mediaSizeBytes,
         },
       });
 
@@ -110,8 +166,9 @@ export function SourceCreateDialog({
       toast.success("Source added");
       handleOpenChange(false);
       resetForm();
-    } catch {
-      toast.error("Failed to add source");
+    } catch (err) {
+      setUploadProgress(null);
+      toast.error(err instanceof Error ? err.message : "Failed to add source");
     }
   };
 
@@ -191,11 +248,7 @@ export function SourceCreateDialog({
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 required
-                placeholder={
-                  kind === "youtube"
-                    ? "https://www.youtube.com/watch?v=..."
-                    : "https://..."
-                }
+                placeholder={kind === "youtube" ? "https://www.youtube.com/watch?v=..." : "https://..."}
               />
             </div>
           )}
@@ -209,6 +262,7 @@ export function SourceCreateDialog({
                 type="file"
                 accept={kind === "image" ? "image/*" : kind === "audio" ? "audio/*" : "video/*"}
                 required
+                disabled={isUploading}
                 onChange={(e) => {
                   const nextFile = e.target.files?.[0] ?? null;
                   setFile(nextFile);
@@ -217,18 +271,32 @@ export function SourceCreateDialog({
                   }
                 }}
               />
-              <p className="text-xs text-muted-foreground">
-                {kind === "image"
-                  ? "Image files are stored as sources and indexed for search."
-                  : kind === "audio"
-                  ? "Audio files are transcribed using Whisper and indexed for search."
-                  : "Video files are stored as sources and transcribed when supported by the backend."}
-              </p>
+              {uploadProgress !== null && (
+                <div className="space-y-1">
+                  <Progress value={uploadProgress} className="h-1.5" />
+                  <p className="text-xs text-muted-foreground">
+                    {uploadProgress < 100 ? `Uploading… ${uploadProgress}%` : "Upload complete"}
+                  </p>
+                </div>
+              )}
+              {uploadProgress === null && (
+                <p className="text-xs text-muted-foreground">
+                  {kind === "image"
+                    ? "Uploaded directly to cloud storage and indexed for search."
+                    : kind === "audio"
+                    ? "Uploaded directly to cloud storage and transcribed with Whisper."
+                    : "Uploaded directly to cloud storage and transcribed when supported."}
+                </p>
+              )}
             </div>
           )}
 
-          <Button type="submit" className="w-full" disabled={createSource.isPending}>
-            Add Source
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={createSource.isPending || isUploading}
+          >
+            {isUploading ? `Uploading… ${uploadProgress}%` : createSource.isPending ? "Saving…" : "Add Source"}
           </Button>
         </form>
       </DialogContent>

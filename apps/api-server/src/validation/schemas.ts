@@ -92,9 +92,10 @@ export const CreateSourceBody = z.object({
   content: z.string().nullish(),
   url: z.string().nullish(),
   parentPageId: z.number().nullish(),
-  fileDataUrl: z.string().nullish(),
+  mediaUrl: z.string().nullish(),
   originalFilename: z.string().nullish(),
   mediaMimeType: z.string().nullish(),
+  mediaSizeBytes: z.number().nullish(),
 });
 
 export const GetSourceParams = z.object({

@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import crypto from "crypto";
 import { db, sourcesTable, sourceChunksTable, pagesTable, blocksTable, transcriptionsTable, sourceTagsTable } from "@workspace/db";
 import { and, asc, eq, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -12,8 +13,6 @@ import {
 import {
   getMediaUrl,
   getYouTubeEmbedUrl,
-  parseDataUrl,
-  persistUploadedFile,
   removeUploadedFile,
 } from "./media";
 import { queueJob } from "../../workers/job-queue";
@@ -67,6 +66,24 @@ function toSourceResponse(row: SourceListRow) {
     tags: tags.filter(t => t !== null),
   };
 }
+
+router.post("/uploads/sign", async (req, res) => {
+  const cloudName = process.env["CLOUDINARY_CLOUD_NAME"];
+  const apiKey = process.env["CLOUDINARY_API_KEY"];
+  const apiSecret = process.env["CLOUDINARY_API_SECRET"];
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    res.status(500).json({ error: "Cloudinary not configured" });
+    return;
+  }
+
+  const timestamp = Math.round(Date.now() / 1000);
+  const folder = "eden/sources";
+  const paramStr = `folder=${folder}&timestamp=${timestamp}`;
+  const signature = crypto.createHash("sha1").update(paramStr + apiSecret).digest("hex");
+
+  res.json({ signature, timestamp, apiKey, cloudName, folder });
+});
 
 router.get("/sources", async (req, res) => {
   const user = (req as any).user;
@@ -127,9 +144,12 @@ router.post("/sources", async (req, res) => {
     res.status(400).json({ error: "URL is required for this source type" });
     return;
   }
-
   if (body.kind === "text" && !body.content?.trim()) {
     res.status(400).json({ error: "Content is required for text sources" });
+    return;
+  }
+  if (["image", "video", "audio"].includes(body.kind) && !body.mediaUrl) {
+    res.status(400).json({ error: "mediaUrl is required — upload the file to Cloudinary first" });
     return;
   }
 
@@ -144,34 +164,6 @@ router.post("/sources", async (req, res) => {
     }
   }
 
-  let uploaded:
-    | {
-        buffer: Buffer;
-        mimeType: string;
-      }
-    | undefined;
-
-  if (body.kind === "image" || body.kind === "video" || body.kind === "audio") {
-    if (!body.fileDataUrl) {
-      res.status(400).json({ error: "fileDataUrl is required for uploaded media" });
-      return;
-    }
-
-    uploaded = parseDataUrl(body.fileDataUrl);
-
-    const isValidImage =
-      body.kind === "image" && uploaded.mimeType.startsWith("image/");
-    const isValidVideo =
-      body.kind === "video" && uploaded.mimeType.startsWith("video/");
-    const isValidAudio =
-      body.kind === "audio" && uploaded.mimeType.startsWith("audio/");
-
-    if (!isValidImage && !isValidVideo && !isValidAudio) {
-      res.status(400).json({ error: "Uploaded file type does not match source kind" });
-      return;
-    }
-  }
-
   const user = (req as any).user;
   const [pending] = await db
     .insert(sourcesTable)
@@ -181,37 +173,15 @@ router.post("/sources", async (req, res) => {
       title: body.title,
       url: body.url ?? null,
       parentPageId: body.parentPageId ?? null,
-      mediaMimeType: uploaded?.mimeType ?? null,
-      mediaSizeBytes: uploaded?.buffer.byteLength ?? null,
+      mediaPath: body.mediaUrl ?? null,
+      mediaMimeType: body.mediaMimeType ?? null,
+      mediaSizeBytes: body.mediaSizeBytes ?? null,
       content: body.content ?? "",
       status: "processing",
     })
     .returning();
   if (!pending) {
     res.status(500).json({ error: "Failed to create source" });
-    return;
-  }
-
-  let mediaPath: string | null = null;
-
-  try {
-    if (uploaded) {
-      mediaPath = await persistUploadedFile({
-        sourceId: pending.id,
-        originalFilename: body.originalFilename,
-        mimeType: uploaded.mimeType,
-        buffer: uploaded.buffer,
-      });
-
-      await db
-        .update(sourcesTable)
-        .set({ mediaPath })
-        .where(eq(sourcesTable.id, pending.id));
-    }
-  } catch (err) {
-    req.log.error({ err, sourceId: pending.id }, "failed to persist uploaded media");
-    await db.delete(sourcesTable).where(eq(sourcesTable.id, pending.id));
-    res.status(500).json({ error: "Failed to store uploaded media" });
     return;
   }
 
@@ -222,7 +192,7 @@ router.post("/sources", async (req, res) => {
       title: pending.title,
       url: pending.url,
       parentPageId: pending.parentPageId,
-      mediaPath,
+      mediaPath: pending.mediaPath,
       mediaMimeType: pending.mediaMimeType,
       mediaSizeBytes: pending.mediaSizeBytes,
       summary: pending.summary,

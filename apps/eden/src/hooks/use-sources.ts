@@ -36,9 +36,10 @@ export interface CreateSourceInput {
   content?: string | null;
   url?: string | null;
   parentPageId?: number | null;
-  fileDataUrl?: string | null;
+  mediaUrl?: string | null;
   originalFilename?: string | null;
   mediaMimeType?: string | null;
+  mediaSizeBytes?: number | null;
 }
 
 export interface UpdateSourceInput {
