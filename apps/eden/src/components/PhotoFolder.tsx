@@ -36,6 +36,7 @@ export type FolderItem = {
 
 interface PhotoFolderProps {
   items: FolderItem[];
+  count?: number;
   title: string;
   emoji?: string | null;
   className?: string;
@@ -101,6 +102,7 @@ function getFileGradient(kind: FolderItem["kind"]) {
 
 export function PhotoFolder({
   items,
+  count,
   title,
   emoji,
   className,
@@ -121,7 +123,7 @@ export function PhotoFolder({
 }: PhotoFolderProps) {
   // Get up to 4 items to display behind the folder
   const displayItems = items.slice(0, 4);
-  const itemCount = items.length;
+  const itemCount = count ?? items.length;
   const [hoveredItem, setHoveredItem] = useState<number | null>(null);
   const [previewItem, setPreviewItem] = useState<FolderItem | null>(null);
 

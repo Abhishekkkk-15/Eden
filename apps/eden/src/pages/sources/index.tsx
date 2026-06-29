@@ -359,6 +359,7 @@ function FolderCard({
     <>
       <PhotoFolder
         items={folderItems}
+        count={folderCount ?? folderSources.length}
         title={folder.title}
         emoji={folder.emoji}
         onClick={onOpen}
