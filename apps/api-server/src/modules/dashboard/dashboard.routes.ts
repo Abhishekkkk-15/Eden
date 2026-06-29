@@ -53,19 +53,19 @@ router.get("/dashboard/recent", async (req, res) => {
     .from(pagesTable)
     .where(eq(pagesTable.userId, user.id))
     .orderBy(desc(pagesTable.updatedAt))
-    .limit(5);
+    .limit(3);
   const recentSources = await db
     .select()
     .from(sourcesTable)
     .where(eq(sourcesTable.userId, user.id))
     .orderBy(desc(sourcesTable.createdAt))
-    .limit(5);
+    .limit(3);
   const recentConvs = await db
     .select()
     .from(conversationsTable)
     .where(eq(conversationsTable.userId, user.id))
     .orderBy(desc(conversationsTable.updatedAt))
-    .limit(5);
+    .limit(3);
 
   const items = [
     ...recentPages.map((p) => ({
@@ -92,7 +92,7 @@ router.get("/dashboard/recent", async (req, res) => {
   ];
 
   items.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
-  res.json(items.slice(0, 10));
+  res.json(items.slice(0, 5));
 });
 
 export default router;
