@@ -71,7 +71,7 @@ async function fetchSource(id: number): Promise<SourceWithChunks> {
   return res.json();
 }
 
-async function createSourceRequest(data: CreateSourceInput): Promise<Source> {
+export async function createSourceRequest(data: CreateSourceInput): Promise<Source> {
   const res = await fetch(`${API_BASE_URL}/sources`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
