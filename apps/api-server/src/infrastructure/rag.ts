@@ -442,7 +442,7 @@ export async function buildContextFromSelection(
   };
 }
 
-export async function chunkText(text: string, chunkSize = 800, overlap = 120): Promise<string[]> {
+export async function chunkText(text: string, chunkSize = 2000, overlap = 250): Promise<string[]> {
   const clean = text.replace(/\r\n/g, "\n").trim();
   if (!clean) return [];
   if (clean.length <= chunkSize) return [clean];
