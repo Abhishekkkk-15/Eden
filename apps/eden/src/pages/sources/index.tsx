@@ -34,6 +34,7 @@ import {
   HardDrive,
   ImageIcon,
   Link as LinkIcon,
+  Loader2,
   Plus,
   Youtube,
   MoreVertical,
@@ -900,7 +901,7 @@ export default function SourcesList() {
   const [currentPage, setCurrentPage] = useState(1);
 
   // Paginated folder data — primary data source for the folder view
-  const { data: folderData, isLoading: folderLoading } = useListSourcesInFolder(folderId, currentPage);
+  const { data: folderData, isLoading: folderLoading, isFetching: folderFetching } = useListSourcesInFolder(folderId, currentPage);
 
   // Reset to page 1 whenever the user navigates to a different folder
   useEffect(() => { setCurrentPage(1); }, [folderId]);
@@ -1334,9 +1335,17 @@ export default function SourcesList() {
                   ))}
                 </div>
               )}
-              <h1 className="truncate text-base font-semibold text-foreground">
-                {searchQuery.trim() ? `"${searchQuery}"` : (currentFolder ? currentFolder.title : "My Drive")}
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="truncate text-base font-semibold text-foreground">
+                  {searchQuery.trim() ? `"${searchQuery}"` : (currentFolder ? currentFolder.title : "My Drive")}
+                </h1>
+                {(folderFetching && !folderLoading && !searchQuery.trim()) && (
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+                )}
+                {(searchQuery.trim() && searchLoading) && (
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+                )}
+              </div>
             </div>
           </div>
 
@@ -1488,12 +1497,20 @@ export default function SourcesList() {
           <WorkspaceSearchPanel className="max-w-none" />
         </div>
 
-        {isLoading ?
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <Skeleton key={i} className="h-40 w-full rounded-2xl" />
-            ))}
-          </div>
+        {isLoading || (searchQuery.trim() && searchLoading) ?
+          viewMode === "grid" ? (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <Skeleton key={i} className="h-40 w-full rounded-2xl" />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <Skeleton key={i} className="h-10 w-full rounded-lg" />
+              ))}
+            </div>
+          )
         : childFolders.length === 0 && childDocuments.length === 0 && childFiles.length === 0 ?
           <Card className="border-dashed border-border/80 bg-card/40 shadow-sm">
             <CardContent className="py-16 text-center">
@@ -1509,7 +1526,7 @@ export default function SourcesList() {
               </div>
             </CardContent>
           </Card>
-        : <div className="space-y-6">
+        : <div className={cn("space-y-6 transition-opacity duration-200", folderFetching && !folderLoading && "opacity-60 pointer-events-none")}>
             {/* List view column header */}
             {viewMode === "list" && (
               <div className="flex items-center gap-3 px-3 py-1.5 text-xs font-medium text-muted-foreground border-b border-border/60 select-none">
