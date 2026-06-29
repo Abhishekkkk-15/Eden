@@ -18,7 +18,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { API_BASE_URL } from "@/config";
-import { UploadCloud, FileImage, FileVideo, FileAudio, X, CheckCircle2, AlertCircle } from "lucide-react";
+import { UploadCloud, FileImage, FileVideo, FileAudio, X, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -329,7 +329,10 @@ export function SourceCreateDialog({
   };
 
   const queuedCount = pendingFiles.filter((f) => f.status === "queued").length;
+  const uploadingCount = pendingFiles.filter((f) => f.status === "uploading").length;
+  const doneCount = pendingFiles.filter((f) => f.status === "done").length;
   const allDone = pendingFiles.length > 0 && pendingFiles.every((f) => f.status === "done");
+  const totalToUpload = pendingFiles.filter((f) => f.status !== "queued").length; // files that have started
 
   // ── render ─────────────────────────────────────────────────────────────────
 
@@ -428,42 +431,80 @@ export function SourceCreateDialog({
               </div>
             ) : (
               /* File list */
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                {pendingFiles.map((pf) => (
-                  <div key={pf.id} className="flex items-center gap-2 p-2 rounded-lg border border-border bg-card">
-                    <FileKindIcon kind={pf.kind} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{pf.title}</p>
-                      {pf.status === "uploading" && (
-                        <Progress value={pf.progress} className="h-1 mt-1" />
+              <div className="space-y-2">
+                {/* Overall progress banner */}
+                {isSubmitting && (
+                  <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-primary/8 border border-primary/15">
+                    <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
+                    <span className="text-xs text-primary font-medium">
+                      Uploading {doneCount} of {totalToUpload} file{totalToUpload !== 1 ? "s" : ""}…
+                    </span>
+                  </div>
+                )}
+                <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                  {pendingFiles.map((pf) => (
+                    <div
+                      key={pf.id}
+                      className={cn(
+                        "flex items-center gap-2 p-2 rounded-lg border transition-colors",
+                        pf.status === "uploading" && "bg-primary/5 border-primary/20",
+                        pf.status === "done" && "bg-green-500/5 border-green-500/20",
+                        pf.status === "error" && "bg-destructive/5 border-destructive/20",
+                        pf.status === "queued" && "bg-card border-border",
+                      )}
+                    >
+                      {/* Icon: spinner while uploading, kind icon otherwise */}
+                      <div className="shrink-0">
+                        {pf.status === "uploading" ? (
+                          <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                        ) : (
+                          <FileKindIcon kind={pf.kind} />
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{pf.title}</p>
+                        {pf.status === "uploading" && (
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <Progress value={pf.progress} className="h-1 flex-1" />
+                            <span className="text-[10px] text-primary tabular-nums w-7 text-right shrink-0">
+                              {pf.progress}%
+                            </span>
+                          </div>
+                        )}
+                        {pf.status === "error" && (
+                          <p className="text-[11px] text-destructive truncate mt-0.5">{pf.error}</p>
+                        )}
+                        {pf.status === "done" && (
+                          <p className="text-[11px] text-green-600 dark:text-green-400 mt-0.5">Uploaded</p>
+                        )}
+                      </div>
+
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] shrink-0 capitalize"
+                      >
+                        {pf.kind}
+                      </Badge>
+
+                      {pf.status === "done" && (
+                        <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
                       )}
                       {pf.status === "error" && (
-                        <p className="text-[11px] text-destructive truncate">{pf.error}</p>
+                        <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+                      )}
+                      {(pf.status === "queued" || pf.status === "error") && (
+                        <button
+                          type="button"
+                          onClick={() => removeFile(pf.id)}
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
                       )}
                     </div>
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] shrink-0 capitalize"
-                    >
-                      {pf.kind}
-                    </Badge>
-                    {pf.status === "done" && (
-                      <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                    )}
-                    {pf.status === "error" && (
-                      <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
-                    )}
-                    {(pf.status === "queued" || pf.status === "error") && (
-                      <button
-                        type="button"
-                        onClick={() => removeFile(pf.id)}
-                        className="text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
 
