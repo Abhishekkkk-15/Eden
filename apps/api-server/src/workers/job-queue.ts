@@ -18,7 +18,7 @@ import {
 } from "../modules/sources/media";
 import { triggerWorkflows } from "../modules/workflows/workflows.routes";
 
-const MAX_CONCURRENT_JOBS = 3;
+const MAX_CONCURRENT_JOBS = Math.max(1, parseInt(process.env["JOB_CONCURRENCY"] ?? "5", 10));
 
 /**
  * Start the job queue processor (BullMQ Worker)
