@@ -19,6 +19,8 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function SourceDetail({ params }: { params: { id: string } }) {
   const sourceId = parseInt(params.id);
@@ -147,7 +149,13 @@ export default function SourceDetail({ params }: { params: { id: string } }) {
       {source.summary && (
         <Card>
           <CardHeader><CardTitle className="text-sm text-muted-foreground">Summary</CardTitle></CardHeader>
-          <CardContent><p className="text-sm leading-relaxed">{source.summary}</p></CardContent>
+          <CardContent>
+            <div className="prose prose-sm dark:prose-invert max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-a:text-primary prose-code:text-foreground prose-li:marker:text-muted-foreground">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {source.summary}
+              </ReactMarkdown>
+            </div>
+          </CardContent>
         </Card>
       )}
 

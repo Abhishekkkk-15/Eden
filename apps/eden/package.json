@@ -71,6 +71,8 @@
     "@rollup/rollup-win32-x64-msvc": "^4.60.2",
     "bcryptjs": "^3.0.3",
     "next-auth": "^4.24.14",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "socket.io-client": "^4.8.3"
   }
 }
