@@ -1,8 +1,7 @@
 import { Router, type IRouter } from "express";
-import { db, sourcesTable, sourceChunksTable, pagesTable, blocksTable, transcriptionsTable, sourceTagsTable, jobQueueTable } from "@workspace/db";
+import { db, sourcesTable, sourceChunksTable, pagesTable, blocksTable, transcriptionsTable, sourceTagsTable } from "@workspace/db";
 import { and, asc, eq, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { emitToUser } from "../../infrastructure/socket";
 import {
   CreateSourceBody,
   GetSourceParams,
@@ -10,23 +9,14 @@ import {
   UpdateSourceParams,
   DeleteSourceParams,
 } from "../../validation/schemas";
-import { chunkText } from "../../infrastructure/rag";
-import { summarize, generateEmbedding } from "../../infrastructure/ai";
-import { pgvectorEnabled } from "../../infrastructure/embed-init";
 import {
-  extractImageContent,
-  extractVideoContent,
-  extractYouTubeContent,
   getMediaUrl,
   getYouTubeEmbedUrl,
   parseDataUrl,
   persistUploadedFile,
   removeUploadedFile,
 } from "./media";
-import { transcribeSource } from "./transcription";
-import { generateMeetingMinutes } from "../../workers/notion-agent";
-import { triggerWorkflows } from "../workflows/workflows.routes";
-import { NodeHtmlMarkdown } from "node-html-markdown";
+import { queueJob } from "../../workers/job-queue";
 
 const router: IRouter = Router();
 
@@ -76,19 +66,6 @@ function toSourceResponse(row: SourceListRow) {
     isPage: row.isPage ?? false,
     tags: tags.filter(t => t !== null),
   };
-}
-
-async function fetchUrl(url: string): Promise<string> {
-  const response = await fetch(url, {
-    redirect: "follow",
-    headers: { "User-Agent": "EdenAIWorkspace/1.0" },
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
-  }
-  const html = await response.text();
-  const markdown = NodeHtmlMarkdown.translate(html);
-  return markdown.slice(0, 100000);
 }
 
 router.get("/sources", async (req, res) => {
@@ -255,134 +232,17 @@ router.post("/sources", async (req, res) => {
     }),
   );
 
-  void (async () => {
-    try {
-      console.log(`[Ingestion] Starting background processing for source ${pending.id} (${body.kind})`);
-      let content = body.content ?? "";
-      let transcription: string | null = null;
-
-      // Run transcription for media files in parallel with other processing
-      // Note: Video now includes visual frame analysis in extractVideoContent, so we skip redundant transcription
-      // Audio and image still need separate transcription
-      if (["audio", "image"].includes(body.kind)) {
-        void (async () => {
-          try {
-            const transcription = await transcribeSource(pending.id, body.kind, mediaPath);
-            req.log.info({ sourceId: pending.id, kind: body.kind }, "transcription completed");
-
-            // Trigger meeting minutes for audio uploads
-            if (body.kind === "audio" && user.id && transcription) {
-              void generateMeetingMinutes(user.id, pending.title, transcription);
-            }
-          } catch (txErr) {
-            req.log.warn({ err: txErr, sourceId: pending.id }, "transcription failed (non-critical)");
-          }
-        })();
-      }
-
-      if (body.kind === "url") {
-        if (!body.url) throw new Error("URL is required for URL-based sources");
-        content = await fetchUrl(body.url);
-      } else if (body.kind === "youtube") {
-        if (!body.url) throw new Error("URL is required for YouTube sources");
-        const extracted = await extractYouTubeContent(body.url);
-        content = extracted.content;
-      } else if (body.kind === "image") {
-        const imageDataUrl = body.fileDataUrl;
-        if (!imageDataUrl) throw new Error("Image upload payload missing");
-        const extracted = await extractImageContent({
-          dataUrl: imageDataUrl,
-          title: body.title,
-          originalFilename: body.originalFilename,
-        });
-        content = extracted.content;
-      } else if (body.kind === "video" || body.kind === "audio") {
-        if (!uploaded) throw new Error("Media upload payload missing");
-        const extracted = await extractVideoContent({
-          buffer: uploaded.buffer,
-          title: body.title,
-          originalFilename: body.originalFilename,
-        });
-        content = extracted.content;
-
-        // Trigger meeting minutes for video uploads
-        if (content) {
-          void generateMeetingMinutes(user.id, pending.title, content);
-        }
-      }
-
-      const chunks = await chunkText(content);
-      let summary: string | null = null;
-      try {
-        if (body.kind === "image") {
-          summary = content || null;
-        } else {
-          summary = await summarize(content);
-        }
-      } catch (summaryErr) {
-        req.log.warn({ err: summaryErr, sourceId: pending.id }, "summary generation failed");
-      }
-
-      await db.transaction(async (tx) => {
-        await tx
-          .update(sourcesTable)
-          .set({ content, summary, status: "ready" })
-          .where(eq(sourcesTable.id, pending.id));
-        if (chunks.length > 0) {
-          await tx.insert(sourceChunksTable).values(
-            chunks.map((c, i) => ({
-              sourceId: pending.id,
-              position: i,
-              content: c,
-            })),
-          );
-        }
-      });
-
-      // Emit real-time update
-      emitToUser(user.id, "source:updated", {
-        sourceId: pending.id,
-        status: "ready",
-        title: pending.title
-      });
-      emitToUser(user.id, "job:completed", {
-        jobId: -1, // Pseudo-job for direct upload
-        entityId: pending.id,
-        entityType: "source"
-      });
-
-      // Generate and store embeddings (non-blocking, best-effort)
-      if (pgvectorEnabled && chunks.length > 0) {
-        void (async () => {
-          try {
-            for (let i = 0; i < chunks.length; i++) {
-              const embedding = await generateEmbedding(chunks[i]!);
-              const vectorStr = `[${embedding.join(",")}]`;
-              await db.execute(sql`
-                UPDATE source_chunks
-                SET embedding = ${vectorStr}::vector
-                WHERE source_id = ${pending.id} AND position = ${i}
-              `);
-            }
-          } catch (embedErr) {
-            req.log.warn({ err: embedErr, sourceId: pending.id }, "embedding generation failed (non-critical)");
-          }
-        })();
-      }
-
-      // Trigger workflows for this source
-      void triggerWorkflows("source_created", pending.id, user.id, {
-        kind: body.kind,
-        parentPageId: body.parentPageId ?? null,
-      });
-    } catch (err) {
-      req.log.error({ err, sourceId: pending.id }, "source ingestion failed");
-      await db
-        .update(sourcesTable)
-        .set({ status: "error" })
-        .where(eq(sourcesTable.id, pending.id));
-    }
-  })();
+  try {
+    await queueJob(user.id, "ingest_source", "source", pending.id, {
+      kind: body.kind,
+      url: body.url ?? null,
+      originalFilename: body.originalFilename ?? null,
+      parentPageId: body.parentPageId ?? null,
+    });
+  } catch (err) {
+    req.log.error({ err, sourceId: pending.id }, "failed to queue ingestion job");
+    await db.update(sourcesTable).set({ status: "error" }).where(eq(sourcesTable.id, pending.id));
+  }
 });
 
 router.get("/sources/:id", async (req, res) => {

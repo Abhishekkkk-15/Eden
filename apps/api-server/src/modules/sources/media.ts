@@ -1,6 +1,7 @@
 import { transcribeAudio } from "@workspace/integrations-groq-ai-server";
 import { uploadToCloudinary, deleteFromCloudinary } from "@workspace/integrations-cloudinary-ai-server";
 import ytdl from "@distube/ytdl-core";
+import { NodeHtmlMarkdown } from "node-html-markdown";
 import { YoutubeTranscript } from "youtube-transcript";
 import { describeImageDataUrl, summarize } from "../../infrastructure/ai";
 import { extractAndAnalyzeVideoFrames } from "./video-frames";
@@ -73,6 +74,24 @@ export function getYouTubeEmbedUrl(url: string | null | undefined): string | nul
   } catch {
     return null;
   }
+}
+
+export async function fetchUrl(url: string): Promise<string> {
+  const response = await fetch(url, {
+    redirect: "follow",
+    headers: { "User-Agent": "EdenAIWorkspace/1.0" },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
+  }
+  const html = await response.text();
+  return NodeHtmlMarkdown.translate(html).slice(0, 100000);
+}
+
+export async function fetchBufferFromUrl(url: string): Promise<Buffer> {
+  const response = await fetch(url, { headers: { "User-Agent": "EdenAIWorkspace/1.0" } });
+  if (!response.ok) throw new Error(`Failed to fetch media: ${response.status}`);
+  return Buffer.from(await response.arrayBuffer());
 }
 
 export async function extractImageContent(opts: {

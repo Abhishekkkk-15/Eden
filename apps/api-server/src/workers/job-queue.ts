@@ -1,12 +1,22 @@
 import { db, jobQueueTable, sourcesTable, transcriptionsTable, sourceChunksTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
-import { summarize, completeText, extractEntities } from "../infrastructure/ai";
+import { eq, sql } from "drizzle-orm";
+import { summarize, completeText, extractEntities, generateEmbedding } from "../infrastructure/ai";
 import { transcribeSource, transcribeImage, transcribeVideoFrames } from "../modules/sources/transcription";
 import { generateMeetingMinutes } from "./notion-agent";
 import { Worker } from "bullmq";
 import { redis } from "../infrastructure/redis";
 import { AI_JOB_QUEUE } from "../infrastructure/queues";
 import { emitToUser } from "../infrastructure/socket";
+import { chunkText } from "../infrastructure/rag";
+import { pgvectorEnabled } from "../infrastructure/embed-init";
+import {
+  extractImageContent,
+  extractVideoContent,
+  extractYouTubeContent,
+  fetchUrl,
+  fetchBufferFromUrl,
+} from "../modules/sources/media";
+import { triggerWorkflows } from "../modules/workflows/workflows.routes";
 
 const MAX_CONCURRENT_JOBS = 3;
 
@@ -58,6 +68,7 @@ async function processJob(jobId: number) {
 
   try {
     switch (job.jobType) {
+      case "ingest_source":    await processIngestSourceJob(job); break;
       case "transcribe":       await processTranscriptionJob(job); break;
       case "analyze_video":    await processVideoAnalysisJob(job); break;
       case "analyze_image":    await processImageAnalysisJob(job); break;
@@ -84,6 +95,119 @@ async function processJob(jobId: number) {
     .set({ status: "completed", progress: 100, completedAt: new Date(), updatedAt: new Date() })
     .where(eq(jobQueueTable.id, jobId));
   emitToUser(userId, "job:completed", { jobId });
+}
+
+/**
+ * Full ingestion pipeline for directly uploaded sources (text, url, youtube, image, video, audio).
+ * Replaces the old fire-and-forget block in sources.routes.ts.
+ */
+async function processIngestSourceJob(job: typeof jobQueueTable.$inferSelect) {
+  const { entityId, userId } = job;
+  const payload = job.payload as {
+    kind: string;
+    url?: string | null;
+    originalFilename?: string | null;
+    parentPageId?: number | null;
+  };
+  const { kind, url, originalFilename, parentPageId } = payload;
+
+  const [source] = await db.select().from(sourcesTable).where(eq(sourcesTable.id, entityId));
+  if (!source) throw new Error("Source not found");
+
+  await updateJobProgress(job.id, 10, "Preparing...");
+
+  // Transcription runs in parallel for audio/image (non-blocking, best-effort)
+  if (kind === "audio" || kind === "image") {
+    void (async () => {
+      try {
+        const tx = await transcribeSource(entityId, kind, source.mediaPath);
+        if (kind === "audio" && userId && tx) {
+          void generateMeetingMinutes(userId, source.title, tx);
+        }
+      } catch (e) {
+        console.warn(`[IngestSource] Transcription failed (non-critical) for source ${entityId}:`, e);
+      }
+    })();
+  }
+
+  let content = source.content ?? "";
+
+  if (kind === "url") {
+    await updateJobProgress(job.id, 20, "Fetching URL content...");
+    content = await fetchUrl(url!);
+  } else if (kind === "youtube") {
+    await updateJobProgress(job.id, 20, "Extracting YouTube content...");
+    const extracted = await extractYouTubeContent(url!);
+    content = extracted.content;
+  } else if (kind === "image") {
+    await updateJobProgress(job.id, 20, "Analyzing image with Vision AI...");
+    const buffer = await fetchBufferFromUrl(source.mediaPath!);
+    const mimeType = source.mediaMimeType ?? "image/jpeg";
+    const dataUrl = `data:${mimeType};base64,${buffer.toString("base64")}`;
+    const extracted = await extractImageContent({ dataUrl, title: source.title, originalFilename });
+    content = extracted.content;
+  } else if (kind === "video" || kind === "audio") {
+    await updateJobProgress(job.id, 20, `Extracting ${kind} content...`);
+    const buffer = await fetchBufferFromUrl(source.mediaPath!);
+    const extracted = await extractVideoContent({ buffer, title: source.title, originalFilename });
+    content = extracted.content;
+    if (content && userId) {
+      void generateMeetingMinutes(userId, source.title, content);
+    }
+  }
+
+  await updateJobProgress(job.id, 50, "Chunking content...");
+  const chunks = await chunkText(content);
+
+  await updateJobProgress(job.id, 65, "Generating summary...");
+  let summary: string | null = null;
+  try {
+    summary = kind === "image" ? (content || null) : await summarize(content);
+  } catch (e) {
+    console.warn(`[IngestSource] Summary generation failed (non-critical) for source ${entityId}:`, e);
+  }
+
+  await updateJobProgress(job.id, 80, "Saving...");
+  await db.transaction(async (tx) => {
+    await tx
+      .update(sourcesTable)
+      .set({ content, summary, status: "ready" })
+      .where(eq(sourcesTable.id, entityId));
+    if (chunks.length > 0) {
+      await tx.insert(sourceChunksTable).values(
+        chunks.map((c, i) => ({ sourceId: entityId, position: i, content: c })),
+      );
+    }
+  });
+
+  if (userId) {
+    emitToUser(userId, "source:updated", { sourceId: entityId, status: "ready", title: source.title });
+    emitToUser(userId, "job:completed", { jobId: job.id, entityId, entityType: "source" });
+  }
+
+  // Embeddings — best-effort, non-blocking
+  if (pgvectorEnabled && chunks.length > 0) {
+    void (async () => {
+      try {
+        for (let i = 0; i < chunks.length; i++) {
+          const embedding = await generateEmbedding(chunks[i]!);
+          const vectorStr = `[${embedding.join(",")}]`;
+          await db.execute(sql`
+            UPDATE source_chunks
+            SET embedding = ${vectorStr}::vector
+            WHERE source_id = ${entityId} AND position = ${i}
+          `);
+        }
+      } catch (e) {
+        console.warn(`[IngestSource] Embedding generation failed (non-critical) for source ${entityId}:`, e);
+      }
+    })();
+  }
+
+  void triggerWorkflows("source_created", entityId, userId!, { kind, parentPageId: parentPageId ?? null });
+
+  await updateJobProgress(job.id, 100, "Complete");
+  return { processed: true };
 }
 
 /**
