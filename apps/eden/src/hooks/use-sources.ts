@@ -65,6 +65,41 @@ async function fetchSources(): Promise<Source[]> {
   return res.json();
 }
 
+export interface SourcePageResult {
+  items: (Source & { isPage?: boolean; tags?: string[] })[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+async function fetchSourcesInFolder(
+  parentId: number | null,
+  page: number,
+  limit: number,
+): Promise<SourcePageResult> {
+  const params = new URLSearchParams({
+    parentId: parentId == null ? "null" : String(parentId),
+    page: String(page),
+    limit: String(limit),
+  });
+  const res = await fetch(`${API_BASE_URL}/sources?${params}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Failed to fetch sources");
+  return res.json();
+}
+
+export function getListSourcesInFolderQueryKey(parentId: number | null, page: number, limit: number) {
+  return ["sources", "folder", parentId, page, limit] as const;
+}
+
+export function useListSourcesInFolder(parentId: number | null, page = 1, limit = 20) {
+  return useQuery({
+    queryKey: getListSourcesInFolderQueryKey(parentId, page, limit),
+    queryFn: () => fetchSourcesInFolder(parentId, page, limit),
+    placeholderData: (prev) => prev,
+  });
+}
+
 async function fetchSource(id: number): Promise<SourceWithChunks> {
   const res = await fetch(`${API_BASE_URL}/sources/${id}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Failed to fetch source");

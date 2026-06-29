@@ -85,9 +85,110 @@ router.post("/uploads/sign", async (req, res) => {
   res.json({ signature, timestamp, apiKey, cloudName, folder });
 });
 
+function mapRow(r: Record<string, unknown>) {
+  return toSourceResponse({
+    id: Number(r.id),
+    kind: String(r.kind),
+    title: String(r.title),
+    url: r.url == null ? null : String(r.url),
+    parentPageId: r.parent_page_id == null ? null : Number(r.parent_page_id),
+    mediaPath: r.media_path == null ? null : String(r.media_path),
+    mediaMimeType: r.media_mime_type == null ? null : String(r.media_mime_type),
+    mediaSizeBytes: r.media_size_bytes == null ? null : Number(r.media_size_bytes),
+    summary: r.summary == null ? null : String(r.summary),
+    chunkCount: Number(r.chunk_count) || 0,
+    status: String(r.status),
+    createdAt: new Date(r.created_at as string).toISOString(),
+    isPage: Boolean(r.is_page),
+    tags: r.tags as string[],
+  });
+}
+
 router.get("/sources", async (req, res) => {
   const user = (req as any).user;
-  // Union query to get both sources and pages (documents) in one list
+
+  // Paginated, folder-scoped fetch when ?parentId= is present
+  if ("parentId" in req.query) {
+    const rawParentId = String(req.query.parentId ?? "");
+    const parentId = rawParentId === "null" ? null : Number(rawParentId);
+    const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10)));
+    const offset = (page - 1) * limit;
+
+    let countResult, rows;
+
+    if (parentId == null) {
+      countResult = await db.execute(sql`
+        SELECT COUNT(*)::int AS total FROM (
+          SELECT s.id FROM sources s WHERE s.user_id = ${user.id} AND s.parent_page_id IS NULL
+          UNION ALL
+          SELECT p.id FROM pages p WHERE p.kind = 'page' AND p.user_id = ${user.id} AND p.parent_id IS NULL
+        ) combined
+      `);
+      rows = await db.execute(sql`
+        SELECT id, kind, title, url, parent_page_id, media_path, media_mime_type, media_size_bytes, summary, status, created_at, chunk_count, is_page, tags
+        FROM (
+          SELECT
+            s.id, s.kind, s.title, s.url, s.parent_page_id, s.media_path, s.media_mime_type, s.media_size_bytes,
+            s.summary, s.status, s.created_at,
+            (SELECT count(*) FROM source_chunks c WHERE c.source_id = s.id) AS chunk_count,
+            false as is_page,
+            COALESCE((SELECT json_agg(st.tag) FROM source_tags st WHERE st.source_id = s.id), '[]'::json) AS tags
+          FROM sources s WHERE s.user_id = ${user.id} AND s.parent_page_id IS NULL
+          UNION ALL
+          SELECT
+            p.id, 'page' as kind, p.title, null as url, p.parent_id as parent_page_id,
+            null as media_path, null as media_mime_type, null as media_size_bytes,
+            null as summary, 'ready' as status, p.created_at,
+            0 as chunk_count, true as is_page, '[]'::json as tags
+          FROM pages p WHERE p.kind = 'page' AND p.user_id = ${user.id} AND p.parent_id IS NULL
+        ) combined
+        ORDER BY created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `);
+    } else {
+      countResult = await db.execute(sql`
+        SELECT COUNT(*)::int AS total FROM (
+          SELECT s.id FROM sources s WHERE s.user_id = ${user.id} AND s.parent_page_id = ${parentId}
+          UNION ALL
+          SELECT p.id FROM pages p WHERE p.kind = 'page' AND p.user_id = ${user.id} AND p.parent_id = ${parentId}
+        ) combined
+      `);
+      rows = await db.execute(sql`
+        SELECT id, kind, title, url, parent_page_id, media_path, media_mime_type, media_size_bytes, summary, status, created_at, chunk_count, is_page, tags
+        FROM (
+          SELECT
+            s.id, s.kind, s.title, s.url, s.parent_page_id, s.media_path, s.media_mime_type, s.media_size_bytes,
+            s.summary, s.status, s.created_at,
+            (SELECT count(*) FROM source_chunks c WHERE c.source_id = s.id) AS chunk_count,
+            false as is_page,
+            COALESCE((SELECT json_agg(st.tag) FROM source_tags st WHERE st.source_id = s.id), '[]'::json) AS tags
+          FROM sources s WHERE s.user_id = ${user.id} AND s.parent_page_id = ${parentId}
+          UNION ALL
+          SELECT
+            p.id, 'page' as kind, p.title, null as url, p.parent_id as parent_page_id,
+            null as media_path, null as media_mime_type, null as media_size_bytes,
+            null as summary, 'ready' as status, p.created_at,
+            0 as chunk_count, true as is_page, '[]'::json as tags
+          FROM pages p WHERE p.kind = 'page' AND p.user_id = ${user.id} AND p.parent_id = ${parentId}
+        ) combined
+        ORDER BY created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `);
+    }
+
+    const total = Number((countResult.rows[0] as any).total ?? 0);
+    res.json({
+      items: (rows.rows as Array<Record<string, unknown>>).map(mapRow),
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    });
+    return;
+  }
+
+  // Legacy flat fetch (used by pickers, command palette, chat context, etc.)
   const rows = await db.execute(sql`
     SELECT
       id, kind, title, url, parent_page_id, media_path, media_mime_type, media_size_bytes,
@@ -114,27 +215,7 @@ router.get("/sources", async (req, res) => {
     ) combined
     ORDER BY created_at DESC
   `);
-  res.json(
-    (rows.rows as Array<Record<string, unknown>>).map((r) =>
-      toSourceResponse({
-        id: Number(r.id),
-        kind: String(r.kind),
-        title: String(r.title),
-        url: r.url == null ? null : String(r.url),
-        parentPageId: r.parent_page_id == null ? null : Number(r.parent_page_id),
-        mediaPath: r.media_path == null ? null : String(r.media_path),
-        mediaMimeType: r.media_mime_type == null ? null : String(r.media_mime_type),
-        mediaSizeBytes:
-          r.media_size_bytes == null ? null : Number(r.media_size_bytes),
-        summary: r.summary == null ? null : String(r.summary),
-        chunkCount: Number(r.chunk_count) || 0,
-        status: String(r.status),
-        createdAt: new Date(r.created_at as string).toISOString(),
-        isPage: Boolean(r.is_page),
-        tags: r.tags as string[],
-      }),
-    ),
-  );
+  res.json((rows.rows as Array<Record<string, unknown>>).map(mapRow));
 });
 
 router.post("/sources", async (req, res) => {

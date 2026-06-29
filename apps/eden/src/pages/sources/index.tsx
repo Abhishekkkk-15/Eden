@@ -12,6 +12,7 @@ import {
 import {
   getListSourcesQueryKey,
   useListSources,
+  useListSourcesInFolder,
   useUpdateSource,
   useDeleteSource,
   type Source,
@@ -807,7 +808,8 @@ function sourcesPathForFolder(targetFolderId: number | null, clearSearch = true)
 }
 
 export default function SourcesList() {
-  const { data: sources, isLoading: sourcesLoading } = useListSources();
+  // useListSources: full flat list, used for search filtering (shared cache with command palette)
+  const { data: sources } = useListSources();
   const { data: pages, isLoading: pagesLoading } = useListPages();
   const { data: agents } = useListAgents();
   const [location, setLocation] = useLocation();
@@ -891,6 +893,14 @@ export default function SourcesList() {
   }, []);
 
   const [folderId, setFolderId] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Paginated folder data — primary data source for the folder view
+  const { data: folderData, isLoading: folderLoading } = useListSourcesInFolder(folderId, currentPage);
+
+  // Reset to page 1 whenever the user navigates to a different folder
+  useEffect(() => { setCurrentPage(1); }, [folderId]);
+
   // Search state
   const [searchQuery, setSearchQuery] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -990,6 +1000,10 @@ export default function SourcesList() {
   }, [folderId, searchQuery]);
 
   const sourceList = Array.isArray(sources) ? sources : [];
+  const pagedItems = folderData?.items ?? [];
+  const totalItems = folderData?.total ?? 0;
+  const totalPages = folderData?.totalPages ?? 1;
+
   const folderPages =
     Array.isArray(pages) ? pages.filter((page) => page.kind === "folder") : [];
 
@@ -1025,37 +1039,8 @@ export default function SourcesList() {
       );
       return (sourceList as SourceWithPage[]).filter((s) => sourceIds.has(s.id));
     }
-    return (sourceList as SourceWithPage[]).filter(
-      (source) => (source.parentPageId ?? null) === folderId
-    );
-  }, [folderId, sourceList, searchQuery, searchResults]);
-
-  const folderPreviewMap = useMemo(() => {
-    const map = new Map<number, FolderPreviewItem[]>();
-    const all = sourceList as SourceWithPage[];
-    for (const folder of folderPages) {
-      const previews = all
-        .filter((item) => (item.parentPageId ?? null) === folder.id)
-        .slice(0, 4)
-        .map((item) => ({
-          id: item.id,
-          title: item.title,
-          kind: item.isPage ? ("document" as const) : ("file" as const),
-        }));
-      map.set(folder.id, previews);
-    }
-    return map;
-  }, [folderPages, sourceList]);
-
-  const folderSourcesMap = useMemo(() => {
-    const map = new Map<number, SourceWithPage[]>();
-    const all = sourceList as SourceWithPage[];
-    for (const folder of folderPages) {
-      const sources = all.filter((item) => (item.parentPageId ?? null) === folder.id);
-      map.set(folder.id, sources);
-    }
-    return map;
-  }, [folderPages, sourceList]);
+    return pagedItems as SourceWithPage[];
+  }, [pagedItems, sourceList, searchQuery, searchResults]);
 
   // Separate documents (pages) and files (sources)
   const childDocuments = useMemo(
@@ -1294,7 +1279,7 @@ export default function SourcesList() {
     [folderId, updateSource, queryClient],
   );
 
-  const isLoading = sourcesLoading || pagesLoading;
+  const isLoading = folderLoading || pagesLoading;
 
   if (folderId != null && !currentFolder && !isLoading) {
     return (
@@ -1361,9 +1346,7 @@ export default function SourcesList() {
               <div className="hidden lg:flex items-center gap-1 text-xs text-muted-foreground mr-1">
                 <span>{childFolders.length} folders</span>
                 <span className="opacity-40">·</span>
-                <span>{childDocuments.length} docs</span>
-                <span className="opacity-40">·</span>
-                <span>{childFiles.length} files</span>
+                <span>{totalItems} items</span>
               </div>
             )}
 
@@ -1552,8 +1535,8 @@ export default function SourcesList() {
                       isDropTarget={dropTargetId === folder.id}
                       onDragStart={() => setDraggingId(folder.id)}
                       onDragEnd={() => { setDraggingId(null); setDropTargetId(null); }}
-                      previewItems={folderPreviewMap.get(folder.id) ?? []}
-                      folderSources={folderSourcesMap.get(folder.id) ?? []}
+                      previewItems={[]}
+                      folderSources={[]}
                       assignedAgent={folderAgentMap.get(folder.id) ?? null}
                       onAgentChange={() => refetchFolderAgents()}
                       viewMode={viewMode}
@@ -1610,6 +1593,32 @@ export default function SourcesList() {
             : null}
           </div>
         }
+
+        {/* Pagination */}
+        {!searchQuery.trim() && totalPages > 1 && (
+          <div className="flex items-center justify-center gap-3 py-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => p - 1)}
+              disabled={currentPage === 1 || folderLoading}
+            >
+              Previous
+            </Button>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              Page {currentPage} of {totalPages}
+              <span className="ml-2 opacity-60">({totalItems} items)</span>
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => p + 1)}
+              disabled={currentPage === totalPages || folderLoading}
+            >
+              Next
+            </Button>
+          </div>
+        )}
 
         {/* Bulk Operations Toolbar */}
         <BulkOperationsToolbar
