@@ -28,7 +28,15 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { logout } = useAuth();
   const { resolvedTheme, setTheme } = useTheme();
   const [location] = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => localStorage.getItem("sidebar-collapsed") !== "true",
+  );
+
+  const toggleSidebar = () =>
+    setSidebarOpen((prev) => {
+      localStorage.setItem("sidebar-collapsed", String(prev));
+      return !prev;
+    });
 
   const navItems = [
     { icon: Home, label: "Home", href: "/" },
@@ -57,7 +65,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
           )}
           <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
+            onClick={toggleSidebar}
             className="group relative p-1.5 rounded-md text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors shrink-0"
             title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
           >
