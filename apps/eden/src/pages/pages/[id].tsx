@@ -57,6 +57,8 @@ import { Badge } from "@/components/ui/badge";
 import { SourceCreateDialog } from "@/components/sources/source-create-dialog";
 import { streamChat } from "@/lib/ai";
 import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface BlockTypeOption {
   type: BlockType;
@@ -323,6 +325,26 @@ function BlockRow({
             </button>
           )}
         </div>
+      ) : !isFocused && !isGenerating ? (
+        <div
+          className={`flex-1 min-h-[1.75rem] cursor-text ${classesFor(currentType)} ${currentType === "todo" && block.checked ? "line-through text-muted-foreground" : ""}`}
+          onClick={() => {
+            onFocus();
+            setTimeout(() => editorRef.current?.focus(), 0);
+          }}
+        >
+          {block.content ? (
+            currentType === "text" ? (
+              <div className="prose prose-sm dark:prose-invert max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-a:text-primary prose-code:text-foreground prose-code:bg-muted/60 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-li:marker:text-muted-foreground prose-p:my-1 first:prose-p:mt-0 last:prose-p:mb-0">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.content}</ReactMarkdown>
+              </div>
+            ) : (
+              block.content
+            )
+          ) : (
+            <span className="text-muted-foreground/50">{placeholderFor(currentType)}</span>
+          )}
+        </div>
       ) : (
         <Popover open={slashOpen} onOpenChange={setSlashOpen}>
           <PopoverTrigger asChild>
@@ -336,9 +358,7 @@ function BlockRow({
               onFocus={onFocus}
               className={`flex-1 min-h-[1.75rem] outline-none rounded-sm transition-colors ${classesFor(
                 currentType,
-              )} ${currentType === "todo" && block.checked ? "line-through text-muted-foreground" : ""} empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/50 ${
-                isFocused ? "" : ""
-              }`}
+              )} ${currentType === "todo" && block.checked ? "line-through text-muted-foreground" : ""} empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/50`}
             />
           </PopoverTrigger>
           <PopoverContent align="start" sideOffset={4} className="w-72 p-1">
