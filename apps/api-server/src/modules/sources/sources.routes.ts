@@ -296,6 +296,25 @@ router.post("/sources", async (req, res) => {
   }
 });
 
+router.get("/sources/folder-counts", async (req, res) => {
+  const user = (req as any).user;
+  const rows = await db.execute(sql`
+    SELECT parent_page_id, COUNT(*)::int AS count FROM (
+      SELECT parent_page_id FROM sources
+      WHERE user_id = ${user.id} AND parent_page_id IS NOT NULL
+      UNION ALL
+      SELECT parent_id AS parent_page_id FROM pages
+      WHERE kind = 'page' AND user_id = ${user.id} AND parent_id IS NOT NULL
+    ) combined
+    GROUP BY parent_page_id
+  `);
+  const counts: Record<number, number> = {};
+  for (const row of rows.rows as Array<Record<string, unknown>>) {
+    counts[Number(row.parent_page_id)] = Number(row.count);
+  }
+  res.json(counts);
+});
+
 router.get("/sources/:id", async (req, res) => {
   const { id } = GetSourceParams.parse(req.params);
 

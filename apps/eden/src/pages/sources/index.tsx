@@ -13,6 +13,7 @@ import {
   getListSourcesQueryKey,
   useListSources,
   useListSourcesInFolder,
+  useSourceFolderCounts,
   useUpdateSource,
   useDeleteSource,
   type Source,
@@ -114,6 +115,7 @@ function FolderCard({
   onDragEnd,
   previewItems,
   folderSources,
+  folderCount,
   assignedAgent,
   onAgentChange,
   viewMode = "grid",
@@ -129,6 +131,7 @@ function FolderCard({
   onDragEnd: () => void;
   previewItems: FolderPreviewItem[];
   folderSources: SourceWithPage[];
+  folderCount?: number;
   assignedAgent?: { id: number; name: string; emoji: string; workflowId: number } | null;
   onAgentChange?: () => void;
   viewMode?: "grid" | "list";
@@ -310,7 +313,7 @@ function FolderCard({
           <span className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">{folder.title}</span>
           <span className="hidden sm:block w-24 shrink-0 text-xs text-muted-foreground">Folder</span>
           <span className="hidden md:block w-36 shrink-0 text-xs text-muted-foreground">
-            {folderSources.length} {folderSources.length === 1 ? "item" : "items"}
+            {(folderCount ?? folderSources.length)} {(folderCount ?? folderSources.length) === 1 ? "item" : "items"}
           </span>
           {assignedAgent ? (
             <span className="hidden lg:flex w-24 shrink-0 items-center gap-1 text-[10px] text-primary/80 truncate">
@@ -811,6 +814,7 @@ export default function SourcesList() {
   // useListSources: full flat list, used for search filtering (shared cache with command palette)
   const { data: sources } = useListSources();
   const { data: pages, isLoading: pagesLoading } = useListPages();
+  const { data: folderCounts } = useSourceFolderCounts();
   const { data: agents } = useListAgents();
   const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
@@ -915,6 +919,7 @@ export default function SourcesList() {
     const handleUpdate = () => {
       console.log("[SourcesList] Refreshing due to real-time update...");
       queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
+      queryClient.invalidateQueries({ queryKey: ["sources", "folder-counts"] });
     };
 
     socket.on("job:completed", handleUpdate);
@@ -1537,6 +1542,7 @@ export default function SourcesList() {
                       onDragEnd={() => { setDraggingId(null); setDropTargetId(null); }}
                       previewItems={[]}
                       folderSources={[]}
+                      folderCount={folderCounts?.[folder.id] ?? 0}
                       assignedAgent={folderAgentMap.get(folder.id) ?? null}
                       onAgentChange={() => refetchFolderAgents()}
                       viewMode={viewMode}

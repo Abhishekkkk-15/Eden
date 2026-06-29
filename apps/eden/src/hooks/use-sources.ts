@@ -92,6 +92,19 @@ export function getListSourcesInFolderQueryKey(parentId: number | null, page: nu
   return ["sources", "folder", parentId, page, limit] as const;
 }
 
+async function fetchFolderCounts(): Promise<Record<number, number>> {
+  const res = await fetch(`${API_BASE_URL}/sources/folder-counts`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Failed to fetch folder counts");
+  return res.json();
+}
+
+export function useSourceFolderCounts() {
+  return useQuery({
+    queryKey: ["sources", "folder-counts"],
+    queryFn: fetchFolderCounts,
+  });
+}
+
 export function useListSourcesInFolder(parentId: number | null, page = 1, limit = 20) {
   return useQuery({
     queryKey: getListSourcesInFolderQueryKey(parentId, page, limit),
