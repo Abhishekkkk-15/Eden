@@ -34,6 +34,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Send, FileText, Database, Sparkles, FolderOpen, Trash2, Paperclip, X, WandSparkles, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 function chatPostHeaders(): HeadersInit {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -600,18 +602,24 @@ function MessageBubble({
       <div className={`max-w-[85%] ${isUser ? "items-end" : "items-start"} flex flex-col gap-2`}>
         <div className="group relative">
           <div
-            className={`rounded-2xl px-4 py-2.5 whitespace-pre-wrap text-[15px] leading-relaxed ${
+            className={`rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed ${
               isUser
-                ? "bg-primary text-primary-foreground"
+                ? "bg-primary text-primary-foreground whitespace-pre-wrap"
                 : "bg-muted text-foreground"
             }`}
           >
-            {content}
-            {isStreaming && (
-              <span className="inline-block w-1.5 h-4 ml-0.5 align-middle bg-current/60 animate-pulse" />
-            )}
-            {!content && !isStreaming && (
-              <span className="text-muted-foreground italic">empty</span>
+            {isUser ? (
+              <>
+                {content}
+                {!content && !isStreaming && <span className="text-primary-foreground/60 italic">empty</span>}
+              </>
+            ) : (
+              <div className="prose prose-sm dark:prose-invert max-w-none text-foreground prose-headings:text-foreground prose-headings:font-semibold prose-strong:text-foreground prose-a:text-primary prose-code:text-foreground prose-code:bg-background/60 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-pre:bg-background/60 prose-pre:border prose-pre:border-border prose-li:marker:text-muted-foreground prose-p:leading-relaxed prose-p:my-1.5 first:prose-p:mt-0 last:prose-p:mb-0">
+                {!content && !isStreaming
+                  ? <span className="text-muted-foreground italic">empty</span>
+                  : <ReactMarkdown remarkPlugins={[remarkGfm]}>{isStreaming ? content + "▍" : content}</ReactMarkdown>
+                }
+              </div>
             )}
           </div>
           {!isStreaming && content && (
