@@ -47,7 +47,6 @@ import {
   Bell,
   Clock,
   Upload,
-  Edit3,
   Bot,
   X,
   FolderOpen,
@@ -55,7 +54,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-type TriggerType = "source_created" | "source_updated" | "scheduled" | "manual";
+type TriggerType = "source_created" | "scheduled" | "manual";
 type ActionType = "tag" | "generate_tags" | "move_to_folder" | "ai_organize" | "summarize" | "transcribe" | "extract_entities" | "send_notification" | "webhook" | "ai_transform";
 
 interface WorkflowAction {
@@ -67,14 +66,12 @@ type WorkflowWithActions = Workflow & { actions: WorkflowAction[]; };
 
 const triggerIcons: Record<TriggerType, React.ReactNode> = {
   source_created: <Upload className="w-4 h-4" />,
-  source_updated: <Edit3 className="w-4 h-4" />,
   scheduled: <Clock className="w-4 h-4" />,
   manual: <Play className="w-4 h-4" />,
 };
 
 const triggerLabels: Record<TriggerType, string> = {
   source_created: "When source is created",
-  source_updated: "When source is updated",
   scheduled: "On a schedule",
   manual: "Manual trigger",
 };

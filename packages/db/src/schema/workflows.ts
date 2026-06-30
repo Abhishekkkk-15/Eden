@@ -123,6 +123,5 @@ export type WorkflowAction =
 // Trigger config types
 export type WorkflowTrigger =
   | { type: "source_created"; config: { sourceKind?: string[]; folderId?: number; anyFolder?: boolean } }
-  | { type: "source_updated"; config: { fields?: string[] } }
   | { type: "scheduled"; config: { cron: string; timezone?: string } }
   | { type: "manual"; config: {} };

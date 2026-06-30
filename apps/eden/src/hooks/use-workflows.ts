@@ -6,7 +6,7 @@ export interface Workflow {
   name: string;
   description: string;
   emoji: string;
-  triggerType: "source_created" | "source_updated" | "scheduled" | "manual";
+  triggerType: "source_created" | "scheduled" | "manual";
   triggerConfig: Record<string, unknown>;
   actions: Array<{ type: string; config: Record<string, unknown> }>;
   isActive: boolean;

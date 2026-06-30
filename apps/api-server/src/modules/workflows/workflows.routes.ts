@@ -17,7 +17,7 @@ const CreateWorkflowSchema = z.object({
   name: z.string().min(1),
   description: z.string().default(""),
   emoji: z.string().default("🤖"),
-  triggerType: z.enum(["source_created", "source_updated", "scheduled", "manual"]),
+  triggerType: z.enum(["source_created", "scheduled", "manual"]),
   triggerConfig: z.record(z.unknown()).default({}),
   actions: z.array(WorkflowActionSchema),
   isActive: z.boolean().default(true),
@@ -908,7 +908,7 @@ router.delete("/workflows/folder-agent/:folderId", async (req, res) => {
 
 // Function to trigger workflows based on events
 export async function triggerWorkflows(
-  triggerType: "source_created" | "source_updated",
+  triggerType: "source_created",
   sourceId: number,
   userId: string,
   sourceData: { kind: string; parentPageId: number | null }
