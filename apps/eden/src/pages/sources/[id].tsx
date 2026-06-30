@@ -2,7 +2,7 @@ import { useGetSource, useDeleteSource, getListSourcesQueryKey } from "@/hooks/u
 import { useCreateConversation, getListConversationsQueryKey } from "@/hooks/use-conversations";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Trash2, ArrowLeft, MessageSquare } from "lucide-react";
+import { Trash2, ArrowLeft, MessageSquare, ChevronDown, ChevronUp, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +30,7 @@ export default function SourceDetail({ params }: { params: { id: string } }) {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [contentOpen, setContentOpen] = useState(false);
 
   const handleChatAbout = () => {
     createConversation.mutate(
@@ -159,7 +160,41 @@ export default function SourceDetail({ params }: { params: { id: string } }) {
         </Card>
       )}
 
-      {/* Indexed Content removed per user request */}
+      {chunkList.length > 0 && (
+        <Card>
+          <CardHeader
+            className="cursor-pointer select-none"
+            onClick={() => setContentOpen((v) => !v)}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-muted-foreground" />
+                <CardTitle className="text-sm text-muted-foreground">Indexed Content</CardTitle>
+                <span className="text-xs text-muted-foreground/60">
+                  {chunkList.length} {chunkList.length === 1 ? "chunk" : "chunks"}
+                </span>
+              </div>
+              {contentOpen
+                ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+            </div>
+          </CardHeader>
+          {contentOpen && (
+            <CardContent className="pt-0 space-y-3">
+              {chunkList.map((chunk, i) => (
+                <div key={chunk.id ?? i} className="rounded-md border bg-muted/40 p-3 space-y-1">
+                  <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+                    Chunk {i + 1}
+                  </p>
+                  <p className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">
+                    {chunk.content}
+                  </p>
+                </div>
+              ))}
+            </CardContent>
+          )}
+        </Card>
+      )}
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>

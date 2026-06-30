@@ -17,7 +17,17 @@ const queueOptions = {
   },
 };
 
+export const SCHEDULED_WORKFLOW_QUEUE = "scheduled_workflow";
+
 export const cloudImportQueue = new Queue(CLOUD_IMPORT_QUEUE, queueOptions);
 export const aiJobQueue = new Queue(AI_JOB_QUEUE, queueOptions);
+export const scheduledWorkflowsQueue = new Queue(SCHEDULED_WORKFLOW_QUEUE, {
+  ...queueOptions,
+  defaultJobOptions: {
+    ...queueOptions.defaultJobOptions,
+    removeOnComplete: true,
+    removeOnFail: false,
+  },
+});
 
 console.log("[Queues] BullMQ queues initialized");
