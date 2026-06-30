@@ -115,11 +115,11 @@ export async function extractVideoContent(opts: {
   buffer: Buffer;
   title: string;
   originalFilename?: string | null;
-}): Promise<{ content: string; summary: string | null; visualDescription?: string }> {
+}): Promise<{ content: string; summary: string | null; audioText: string; audioModel: string; visualDescription?: string }> {
   try {
     // 1. Extract audio transcription
-    const { text: audioText } = await transcribeAudio(opts.buffer, opts.originalFilename ?? undefined);
-    const audioContent = audioText.trim();
+    const { text: rawAudioText, model: audioModel } = await transcribeAudio(opts.buffer, opts.originalFilename ?? undefined);
+    const audioContent = rawAudioText.trim();
 
     // 2. Extract visual frames and analyze with vision
     let visualDescription = "";
@@ -147,18 +147,20 @@ export async function extractVideoContent(opts: {
     } else if (visualDescription) {
       combinedContent = visualDescription;
     } else {
-      return { content: "", summary: null };
+      return { content: "", summary: null, audioText: "", audioModel };
     }
 
     return {
       content: combinedContent,
       summary: await summarize(combinedContent),
+      audioText: audioContent,
+      audioModel,
       visualDescription,
     };
   } catch (err) {
     console.error("extractVideoContent failed:", err);
     const fallback = `Video source titled "${opts.title}". Content extraction unavailable.`;
-    return { content: fallback, summary: fallback };
+    return { content: fallback, summary: fallback, audioText: "", audioModel: "" };
   }
 }
 

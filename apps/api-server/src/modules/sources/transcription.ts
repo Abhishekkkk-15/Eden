@@ -70,27 +70,15 @@ export async function transcribeImage(sourceId: number, _mediaPath: string): Pro
     await db.insert(transcriptionsTable).values({
       sourceId,
       content: transcription,
-      model: "gpt-4o-mini",
+      model: "nvidia/llama-3.2-11b-vision-instruct",
     }).onConflictDoUpdate({
       target: transcriptionsTable.sourceId,
       set: {
         content: transcription,
-        model: "gpt-4o-mini",
+        model: "nvidia/llama-3.2-11b-vision-instruct",
         updatedAt: new Date(),
       },
     });
-
-    // Create searchable chunks from transcription
-    const chunks = await chunkText(transcription);
-    if (chunks.length > 0) {
-      await db.insert(sourceChunksTable).values(
-        chunks.map((c, i) => ({
-          sourceId,
-          position: 2000 + i, // Different offset for image OCR chunks
-          content: `[Image OCR] ${c}`,
-        })),
-      );
-    }
 
     return transcription;
   } catch (error) {

@@ -116,21 +116,9 @@ async function processIngestSourceJob(job: typeof jobQueueTable.$inferSelect) {
 
   await updateJobProgress(job.id, 10, "Preparing...");
 
-  // Transcription runs in parallel for audio/image (non-blocking, best-effort)
-  if (kind === "audio" || kind === "image") {
-    void (async () => {
-      try {
-        const tx = await transcribeSource(entityId, kind, source.mediaPath);
-        if (kind === "audio" && userId && tx) {
-          void generateMeetingMinutes(userId, source.title, tx);
-        }
-      } catch (e) {
-        console.warn(`[IngestSource] Transcription failed (non-critical) for source ${entityId}:`, e);
-      }
-    })();
-  }
-
   let content = source.content ?? "";
+  let audioText = "";
+  let audioModel = "";
 
   if (kind === "url") {
     await updateJobProgress(job.id, 20, "Fetching URL content...");
@@ -151,9 +139,8 @@ async function processIngestSourceJob(job: typeof jobQueueTable.$inferSelect) {
     const buffer = await fetchBufferFromUrl(source.mediaPath!);
     const extracted = await extractVideoContent({ buffer, title: source.title, originalFilename });
     content = extracted.content;
-    if (content && userId) {
-      void generateMeetingMinutes(userId, source.title, content);
-    }
+    audioText = extracted.audioText;
+    audioModel = extracted.audioModel;
   }
 
   await updateJobProgress(job.id, 50, "Chunking content...");
@@ -185,19 +172,64 @@ async function processIngestSourceJob(job: typeof jobQueueTable.$inferSelect) {
     emitToUser(userId, "job:completed", { jobId: job.id, entityId, entityType: "source" });
   }
 
+  // Transcription record + video audio chunks + meeting minutes (non-blocking, best-effort)
+  void (async () => {
+    try {
+      if (kind === "image" && content) {
+        await db.insert(transcriptionsTable).values({
+          sourceId: entityId,
+          content,
+          model: "nvidia/llama-3.2-11b-vision-instruct",
+        }).onConflictDoUpdate({
+          target: transcriptionsTable.sourceId,
+          set: { content, model: "nvidia/llama-3.2-11b-vision-instruct", updatedAt: new Date() },
+        });
+      } else if ((kind === "audio" || kind === "video") && audioText) {
+        await db.insert(transcriptionsTable).values({
+          sourceId: entityId,
+          content: audioText,
+          model: audioModel,
+        }).onConflictDoUpdate({
+          target: transcriptionsTable.sourceId,
+          set: { content: audioText, model: audioModel, updatedAt: new Date() },
+        });
+        // For video: index audio transcript at 1000+ separately from the combined content at 0+
+        if (kind === "video") {
+          const audioChunks = await chunkText(audioText);
+          if (audioChunks.length > 0) {
+            await db.insert(sourceChunksTable).values(
+              audioChunks.map((c, i) => ({
+                sourceId: entityId,
+                position: 1000 + i,
+                content: `[Transcription] ${c}`,
+              })),
+            );
+          }
+        }
+        if (userId) {
+          void generateMeetingMinutes(userId, source.title, audioText);
+        }
+      }
+    } catch (e) {
+      console.warn(`[IngestSource] Post-save tasks failed (non-critical) for source ${entityId}:`, e);
+    }
+  })();
+
   // Embeddings — best-effort, non-blocking
   if (pgvectorEnabled && chunks.length > 0) {
     void (async () => {
       try {
-        for (let i = 0; i < chunks.length; i++) {
-          const embedding = await generateEmbedding(chunks[i]!);
-          const vectorStr = `[${embedding.join(",")}]`;
-          await db.execute(sql`
-            UPDATE source_chunks
-            SET embedding = ${vectorStr}::vector
-            WHERE source_id = ${entityId} AND position = ${i}
-          `);
-        }
+        await Promise.all(
+          chunks.map(async (chunk, i) => {
+            const embedding = await generateEmbedding(chunk);
+            const vectorStr = `[${embedding.join(",")}]`;
+            await db.execute(sql`
+              UPDATE source_chunks
+              SET embedding = ${vectorStr}::vector
+              WHERE source_id = ${entityId} AND position = ${i}
+            `);
+          }),
+        );
       } catch (e) {
         console.warn(`[IngestSource] Embedding generation failed (non-critical) for source ${entityId}:`, e);
       }

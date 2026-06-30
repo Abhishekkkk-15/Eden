@@ -330,15 +330,17 @@ async function processQueueItem(itemId: number) {
           );
 
           if (pgvectorEnabled) {
-            for (let i = 0; i < chunks.length; i++) {
-              const embedding = await generateEmbedding(chunks[i]!);
-              const vectorStr = `[${embedding.join(",")}]`;
-              await db.execute(sql`
-                UPDATE source_chunks
-                SET embedding = ${vectorStr}::vector
-                WHERE source_id = ${source.id} AND position = ${i}
-              `);
-            }
+            await Promise.all(
+              chunks.map(async (chunk, i) => {
+                const embedding = await generateEmbedding(chunk);
+                const vectorStr = `[${embedding.join(",")}]`;
+                await db.execute(sql`
+                  UPDATE source_chunks
+                  SET embedding = ${vectorStr}::vector
+                  WHERE source_id = ${source.id} AND position = ${i}
+                `);
+              }),
+            );
           }
         }
       } catch (embedErr) {
