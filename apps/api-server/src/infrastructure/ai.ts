@@ -113,12 +113,17 @@ export async function extractEntities(text: string, entityTypes: string[] = ["pe
   });
 }
 
-export async function generateEmbedding(text: string): Promise<number[]> {
+export const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "nvidia/nemotron-3-embed-1b";
+
+export async function generateEmbedding(
+  text: string,
+  inputType: "query" | "passage" = "query"
+): Promise<number[]> {
   const res = await nvidiaClient.embeddings.create({
-    model: "nvidia/nv-embedqa-e5-v5",
+    model: EMBEDDING_MODEL,
     input: text.slice(0, 8192),
     encoding_format: "float",
-    input_type: "query"
+    input_type: inputType,
   } as any);
   return ((res.data[0] as any).embedding) as number[];
 }

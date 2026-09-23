@@ -332,7 +332,7 @@ async function processQueueItem(itemId: number) {
           if (pgvectorEnabled) {
             await Promise.all(
               chunks.map(async (chunk, i) => {
-                const embedding = await generateEmbedding(chunk);
+                const embedding = await generateEmbedding(chunk, "passage");
                 const vectorStr = `[${embedding.join(",")}]`;
                 await db.execute(sql`
                   UPDATE source_chunks

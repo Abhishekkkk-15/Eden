@@ -6,9 +6,22 @@ export async function initEmbeddingExtension(): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("CREATE EXTENSION IF NOT EXISTS vector");
-    await client.query(
-      "ALTER TABLE source_chunks ADD COLUMN IF NOT EXISTS embedding vector(1024)"
-    );
+    await client.query(`
+      DO $$
+      DECLARE
+        col_dim integer;
+      BEGIN
+        SELECT atttypmod INTO col_dim
+        FROM pg_attribute
+        WHERE attrelid = 'source_chunks'::regclass AND attname = 'embedding';
+
+        IF col_dim IS NULL THEN
+          ALTER TABLE source_chunks ADD COLUMN embedding vector(2048);
+        ELSIF col_dim != 2048 THEN
+          ALTER TABLE source_chunks ALTER COLUMN embedding TYPE vector(2048) USING NULL;
+        END IF;
+      END $$;
+    `);
     pgvectorEnabled = true;
     console.log("[EmbedInit] pgvector ready — semantic search enabled");
   } catch (err) {
