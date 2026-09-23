@@ -15,8 +15,8 @@ FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm@10.2.0
+# Install pnpm (matching lockfile version 9)
+RUN npm install -g pnpm@9
 
 # Copy workspace configuration files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc* ./
@@ -27,11 +27,8 @@ COPY packages/integrations-openai-ai-server/package.json ./packages/integrations
 COPY apps/api-server/package.json ./apps/api-server/
 COPY apps/eden/package.json ./apps/eden/
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
-
-# Approve any build scripts for pnpm 10
-RUN pnpm approve-builds --all || true
+# Install dependencies (use --no-frozen-lockfile to avoid platform/version override discrepancies)
+RUN pnpm install --no-frozen-lockfile
 
 # Copy project source code
 COPY tsconfig.base.json tsconfig.json ./
@@ -58,6 +55,7 @@ FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 
 # Install essential system utilities and CA certificates
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
