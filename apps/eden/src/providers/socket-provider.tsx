@@ -15,7 +15,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     console.log("[Socket] Effect triggered - User object:", user);
     if (user?.id) {
       console.log("[Socket] Initializing connection for user:", user.id);
-      const socketInstance = io(import.meta.env.VITE_API_URL || "http://localhost:4000", {
+      const socketUrl = import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "");
+      const socketInstance = io(socketUrl || undefined, {
         query: { userId: user.id },
       });
 

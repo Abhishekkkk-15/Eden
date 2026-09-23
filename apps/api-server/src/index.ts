@@ -8,14 +8,7 @@ import { startNotionAgent } from "./workers/notion-agent";
 import { initEmbeddingExtension } from "./infrastructure/embed-init";
 import { initSocket } from "./infrastructure/socket";
 
-const rawPort = process.env["PORT"];
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
+const rawPort = process.env["PORT"] || process.env["API_PORT"] || "4000";
 const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {
