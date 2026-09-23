@@ -17,7 +17,7 @@ function getGroqClient() {
 }
 
 // Groq models for text
-export const CHAT_MODEL = "llama-3.3-70b-versatile";
+export const CHAT_MODEL = process.env.GROQ_CHAT_MODEL || "openai/gpt-oss-120b";
 // NVIDIA NIM model for vision (since Groq account lacks vision access)
 export const VISION_MODEL = "meta/llama-3.2-11b-vision-instruct";
 
