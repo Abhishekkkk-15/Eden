@@ -37,6 +37,9 @@ COPY apps/api-server/ ./apps/api-server/
 COPY apps/eden/ ./apps/eden/
 
 # Set build-time environment variables
+ARG VITE_GOOGLE_CLIENT_ID
+ARG GOOGLE_CLIENT_ID
+ENV VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID:-$GOOGLE_CLIENT_ID}
 ENV NODE_ENV=production
 ENV BASE_PATH=/
 ENV PORT=3000

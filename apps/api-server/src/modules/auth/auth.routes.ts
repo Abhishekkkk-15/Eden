@@ -100,4 +100,10 @@ router.post("/google", async (req, res) => {
   }
 });
 
+router.get("/google/client-id", (_req, res) => {
+  res.json({
+    clientId: process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || "",
+  });
+});
+
 export default router;

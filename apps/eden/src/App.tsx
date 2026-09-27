@@ -76,10 +76,25 @@ function Router() {
 }
 
 function App() {
-  const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "850024943532-e8aanbtp8sjr9jka0c0b0fhmjdpomurb.apps.googleusercontent.com";
+  const [googleClientId, setGoogleClientId] = useState<string>(
+    import.meta.env.VITE_GOOGLE_CLIENT_ID || ""
+  );
+
+  useEffect(() => {
+    if (!googleClientId) {
+      fetch("/api/auth/google/client-id")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.clientId) {
+            setGoogleClientId(data.clientId);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [googleClientId]);
 
   return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+    <GoogleOAuthProvider clientId={googleClientId}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
