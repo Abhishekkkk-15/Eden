@@ -16,15 +16,18 @@ Chunking splits the full text into smaller overlapping pieces. Each piece gets i
 
 ---
 
-## No External Library — Custom Implementation
+## The Chunking Strategy: MarkdownHeaderTextSplitter with Recursive Boundary Snapping
 
-**There is no third-party chunking library used.** No LangChain, no LlamaIndex, no `@pinecone-database/doc-splitter`, nothing.
+Eden uses a **LangChain-compatible `MarkdownHeaderTextSplitter`** architecture:
 
-`chunkText` is a **hand-written** sliding window chunker in ~20 lines of TypeScript. It uses only built-in JavaScript string methods (`lastIndexOf`, `slice`, `trim`).
+1. **Header-Aware Splitting**: Markdown documents are split along heading boundaries (`#` through `######`) while tracking active header hierarchies (`Header 1 > Header 2 > Header 3`).
+2. **Hierarchical Context Enrichment**: Child sections are automatically prepended with parent header breadcrumbs (e.g. `[Documentation > Architecture]`) so embeddings and full-text search retain complete contextual awareness.
+3. **Length-Constrained Recursive Snapping**: If an individual section exceeds `chunkSize` (default: `2000` chars), it is sub-chunked using natural boundary snapping (`\n\n`, `. `, ` `) with `overlap` (`250` chars), carrying continuation breadcrumbs (`[Header (cont.)]`).
+4. **Graceful Fallback**: Text without markdown headers (audio transcripts, plain text) seamlessly falls back to paragraph/sentence boundary snapping.
 
 ---
 
-## The Strategy: Fixed-Size Sliding Window with Natural Boundary Snapping
+## Configuration & Parameters
 
 ### Parameters
 

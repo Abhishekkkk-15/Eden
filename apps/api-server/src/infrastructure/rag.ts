@@ -3,6 +3,11 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Citation } from "@workspace/db";
 import { generateEmbedding } from "./ai";
 import { pgvectorEnabled } from "./embed-init";
+import {
+  MarkdownHeaderTextSplitter,
+  chunkMarkdownWithHeaders,
+  splitByBoundaries,
+} from "./markdown-splitter";
 
 export type RagHit = {
   kind: "page" | "block" | "source" | "chunk";
@@ -442,27 +447,14 @@ export async function buildContextFromSelection(
   };
 }
 
+/**
+ * Chunks text using LangChain-compatible MarkdownHeaderTextSplitter strategy:
+ * - Splits along markdown header boundaries (# through ######) preserving hierarchical context
+ * - Applies natural boundary snapping (paragraphs, sentences) if a section exceeds chunkSize
+ * - Falls back to natural boundary snapping for plain text or transcriptions without headers
+ */
 export async function chunkText(text: string, chunkSize = 2000, overlap = 250): Promise<string[]> {
-  const clean = text.replace(/\r\n/g, "\n").trim();
-  if (!clean) return [];
-  if (clean.length <= chunkSize) return [clean];
-
-  const chunks: string[] = [];
-  let i = 0;
-  while (i < clean.length) {
-    const end = Math.min(clean.length, i + chunkSize);
-    let cut = end;
-    if (end < clean.length) {
-      const para = clean.lastIndexOf("\n\n", end);
-      const sent = clean.lastIndexOf(". ", end);
-      const candidate = Math.max(para, sent);
-      if (candidate > i + chunkSize * 0.5) cut = candidate;
-    }
-    chunks.push(clean.slice(i, cut).trim());
-    if (cut >= clean.length) break;
-    i = Math.max(cut - overlap, i + 1);
-  }
-  return chunks.filter((c) => c.length > 0);
+  return chunkMarkdownWithHeaders(text, chunkSize, overlap);
 }
 
-export { inArray };
+export { inArray, MarkdownHeaderTextSplitter, chunkMarkdownWithHeaders, splitByBoundaries };
