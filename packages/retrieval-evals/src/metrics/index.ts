@@ -10,3 +10,6 @@ export * from "./semantic/cosine";
 export * from "./semantic/semantic-similarity";
 export * from "./semantic/context-relevance";
 export * from "./semantic/context-recall";
+
+// Metric presets
+export * from "./presets";

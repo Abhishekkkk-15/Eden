@@ -8,6 +8,9 @@
 // Core Contracts & Types
 export * from "./types";
 
+// Zero-dependency AI Client Factory
+export * from "./client/create-client";
+
 // Dataset Loaders & Schemas
 export * from "./dataset";
 
@@ -19,3 +22,6 @@ export * from "./runner";
 
 // Reporting & Formatters
 export * from "./reporters";
+
+// High-Level All-In-One API
+export * from "./evaluate";

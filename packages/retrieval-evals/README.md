@@ -26,6 +26,41 @@ A modular, zero-workspace-coupled Retrieval Evaluation framework designed for te
 
 ---
 
+## ⚡ Quickstart (Zero Boilerplate)
+
+Evaluate any search function in 4 lines of code:
+
+```typescript
+import { evaluate, initDatasetFile } from "@workspace/retrieval-evals";
+
+// 1. (Optional) Generate a starter dataset JSON template
+await initDatasetFile("./my-dataset.json");
+
+// 2. Run evaluation
+await evaluate({
+  dataset: "./my-dataset.json", // Accepts file path or object
+  retriever: async (query, { k = 5 }) => mySearch(query, k),
+  metrics: "standard",          // Preset: MRR, HitRate@1, HitRate@5, Precision@5, Recall@5
+  save: true,                   // Automatically writes .json and .md to ./eval-reports
+  print: true,                  // Prints formatted results table to terminal
+});
+```
+
+### Automatic A/B Comparison (Benchmarking Changes)
+Compare your current retrieval run directly against a baseline to flag improvements and regressions:
+
+```typescript
+await evaluate({
+  dataset: "./my-dataset.json",
+  retriever: async (query) => newSearch(query),
+  compareWith: "./eval-reports/baseline.json", // Auto-computes deltas and flags regressions!
+  save: true,
+  print: true,
+});
+```
+
+---
+
 ## 📦 Usage in Another Project (Standalone)
 
 ```typescript
