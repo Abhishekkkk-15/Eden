@@ -1,4 +1,4 @@
-import type { MetricSummary, QueryEvaluationResult } from "../types/results";
+import type { MetricSummary, QueryEvaluationResult } from "../types/results.js";
 
 function round(val: number, decimals = 4): number {
   const factor = Math.pow(10, decimals);

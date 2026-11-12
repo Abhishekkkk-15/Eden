@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { EvaluationDataset, QueryCase } from "../types/dataset";
-import { EvaluationDatasetSchema, QueryCaseSchema } from "./schema";
+import type { EvaluationDataset, QueryCase } from "../types/dataset.js";
+import { EvaluationDatasetSchema, QueryCaseSchema } from "./schema.js";
 
 /**
  * Validates and normalizes an in-memory dataset object.

@@ -1,5 +1,5 @@
-import type { Metric, MetricContext, MetricResult } from "../../types/metric";
-import { isItemRelevant } from "./helpers";
+import type { Metric, MetricContext, MetricResult } from "../../types/metric.js";
+import { isItemRelevant } from "./helpers.js";
 
 export interface HitRateOptions {
   k?: number;

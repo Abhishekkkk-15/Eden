@@ -1,6 +1,6 @@
-import type { Metric, MetricContext, MetricResult } from "../../types/metric";
-import type { AIClient } from "../../types/client";
-import { cosineSimilarity } from "./cosine";
+import type { Metric, MetricContext, MetricResult } from "../../types/metric.js";
+import type { AIClient } from "../../types/client.js";
+import { cosineSimilarity } from "./cosine.js";
 
 export interface SemanticSimilarityOptions {
   aiClient?: AIClient;

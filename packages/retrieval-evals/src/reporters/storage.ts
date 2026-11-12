@@ -5,10 +5,10 @@ import type {
   EvaluationReport,
   SaveReportOptions,
   SavedReportPaths,
-} from "../types/results";
-import { formatMarkdownReport } from "./markdown";
-import { formatComparisonMarkdown } from "./comparison-markdown";
-import { formatJsonReport } from "./json";
+} from "../types/results.js";
+import { formatMarkdownReport } from "./markdown.js";
+import { formatComparisonMarkdown } from "./comparison-markdown.js";
+import { formatJsonReport } from "./json.js";
 
 function sanitizeFilename(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9_-]/g, "_").replace(/_+/g, "_");

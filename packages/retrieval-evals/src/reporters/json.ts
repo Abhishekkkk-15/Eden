@@ -1,4 +1,4 @@
-import type { EvaluationReport } from "../types/results";
+import type { EvaluationReport } from "../types/results.js";
 
 /**
  * Formats an evaluation report as a pretty-printed JSON string.

@@ -1,25 +1,25 @@
-import type { EvaluationDataset } from "./types/dataset";
-import type { RetrieverFn } from "./types/retriever";
-import type { AIClient } from "./types/client";
-import type { Metric } from "./types/metric";
+import type { EvaluationDataset } from "./types/dataset.js";
+import type { RetrieverFn } from "./types/retriever.js";
+import type { AIClient } from "./types/client.js";
+import type { Metric } from "./types/metric.js";
 import type {
   ComparisonReport,
   EvaluationReport,
   SaveReportOptions,
   SavedReportPaths,
-} from "./types/results";
-import { loadDataset, loadDatasetFromJson, loadDatasetFromJsonl } from "./dataset/loader";
-import { resolveMetrics, type MetricPresetName, type PresetOptions } from "./metrics/presets";
-import { runRetrievalEval, type RunProgress } from "./runner/runner";
-import { compareEvaluationReports } from "./runner/comparator";
-import { formatConsoleTable } from "./reporters/console";
-import { formatMarkdownReport } from "./reporters/markdown";
-import { formatComparisonMarkdown } from "./reporters/comparison-markdown";
+} from "./types/results.js";
+import { loadDataset, loadDatasetFromJson, loadDatasetFromJsonl } from "./dataset/loader.js";
+import { resolveMetrics, type MetricPresetName, type PresetOptions } from "./metrics/presets.js";
+import { runRetrievalEval, type RunProgress } from "./runner/runner.js";
+import { compareEvaluationReports } from "./runner/comparator.js";
+import { formatConsoleTable } from "./reporters/console.js";
+import { formatMarkdownReport } from "./reporters/markdown.js";
+import { formatComparisonMarkdown } from "./reporters/comparison-markdown.js";
 import {
   saveEvaluationReport,
   saveComparisonReport,
   loadEvaluationReportFromJson,
-} from "./reporters/storage";
+} from "./reporters/storage.js";
 
 export interface EvaluateOptions {
   /**
@@ -41,6 +41,11 @@ export interface EvaluateOptions {
    * - Or an array of custom Metric instances
    */
   metrics?: MetricPresetName | Metric[];
+
+  /**
+   * Shorthand alias to select a metric preset (`"standard"` | `"semantic"` | `"all"`).
+   */
+  preset?: MetricPresetName;
 
   /**
    * Optional OpenAI-compatible client for semantic similarity or LLM judge metrics.
@@ -134,7 +139,8 @@ export async function evaluate(options: EvaluateOptions): Promise<EvaluateResult
   const {
     dataset: datasetInput,
     retriever,
-    metrics: metricsInput,
+    metrics: metricsOption,
+    preset: presetOption,
     aiClient,
     embeddingClient,
     chatClient,
@@ -163,6 +169,7 @@ export async function evaluate(options: EvaluateOptions): Promise<EvaluateResult
   }
 
   // 2. Resolve Metrics
+  const metricsInput = metricsOption ?? presetOption;
   const presetOptions: PresetOptions = {
     k,
     aiClient,

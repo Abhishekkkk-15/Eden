@@ -1,3 +1,3 @@
-export * from "./schema";
-export * from "./loader";
-export * from "./template";
+export * from "./schema.js";
+export * from "./loader.js";
+export * from "./template.js";

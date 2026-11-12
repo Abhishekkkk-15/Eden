@@ -3,7 +3,7 @@ import type {
   EvaluationReport,
   MetricDelta,
   QueryDelta,
-} from "../types/results";
+} from "../types/results.js";
 
 function round(val: number, decimals = 4): number {
   const factor = Math.pow(10, decimals);

@@ -1,5 +1,5 @@
-import type { RetrievalResultItem } from "../../types/retriever";
-import type { GroundTruth } from "../../types/dataset";
+import type { RetrievalResultItem } from "../../types/retriever.js";
+import type { GroundTruth } from "../../types/dataset.js";
 
 /**
  * Checks whether a retrieved item matches ground truth relevance criteria.

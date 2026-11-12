@@ -1,5 +1,5 @@
-import type { Metric, MetricContext, MetricResult } from "../../types/metric";
-import type { AIClient } from "../../types/client";
+import type { Metric, MetricContext, MetricResult } from "../../types/metric.js";
+import type { AIClient } from "../../types/client.js";
 
 export interface ContextRelevanceOptions {
   aiClient?: AIClient;

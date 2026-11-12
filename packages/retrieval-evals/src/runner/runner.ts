@@ -1,10 +1,10 @@
-import type { EvaluationDataset, QueryCase } from "../types/dataset";
-import type { RetrieverFn } from "../types/retriever";
-import type { Metric } from "../types/metric";
-import type { AIClient } from "../types/client";
-import type { EvaluationReport, QueryEvaluationResult, QueryMetricScore } from "../types/results";
-import { createAsyncPool } from "./pool";
-import { aggregateResults } from "./aggregator";
+import type { EvaluationDataset, QueryCase } from "../types/dataset.js";
+import type { RetrieverFn } from "../types/retriever.js";
+import type { Metric } from "../types/metric.js";
+import type { AIClient } from "../types/client.js";
+import type { EvaluationReport, QueryEvaluationResult, QueryMetricScore } from "../types/results.js";
+import { createAsyncPool } from "./pool.js";
+import { aggregateResults } from "./aggregator.js";
 
 export interface RunProgress {
   completed: number;

@@ -1,12 +1,12 @@
-import type { Metric } from "../types/metric";
-import type { AIClient } from "../types/client";
-import { mrr } from "./traditional/mrr";
-import { hitRate } from "./traditional/hit-rate";
-import { precisionAtK } from "./traditional/precision-at-k";
-import { recallAtK } from "./traditional/recall-at-k";
-import { semanticSimilarity } from "./semantic/semantic-similarity";
-import { contextRelevance } from "./semantic/context-relevance";
-import { contextRecall } from "./semantic/context-recall";
+import type { Metric } from "../types/metric.js";
+import type { AIClient } from "../types/client.js";
+import { mrr } from "./traditional/mrr.js";
+import { hitRate } from "./traditional/hit-rate.js";
+import { precisionAtK } from "./traditional/precision-at-k.js";
+import { recallAtK } from "./traditional/recall-at-k.js";
+import { semanticSimilarity } from "./semantic/semantic-similarity.js";
+import { contextRelevance } from "./semantic/context-relevance.js";
+import { contextRecall } from "./semantic/context-recall.js";
 
 export interface PresetOptions {
   k?: number;

@@ -525,11 +525,11 @@ importers:
   packages/retrieval-evals:
     dependencies:
       zod:
-        specifier: 'catalog:'
+        specifier: ^3.24.0 || ^4.0.0
         version: 3.25.76
     devDependencies:
       '@types/node':
-        specifier: 'catalog:'
+        specifier: ^20.0.0 || ^22.0.0 || ^25.0.0
         version: 25.6.0
       typescript:
         specifier: ^5.0.0

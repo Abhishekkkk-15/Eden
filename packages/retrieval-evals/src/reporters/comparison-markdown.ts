@@ -1,4 +1,4 @@
-import type { ComparisonReport } from "../types/results";
+import type { ComparisonReport } from "../types/results.js";
 
 /**
  * Formats a ComparisonReport as a beautiful, actionable GitHub-flavored Markdown document.
