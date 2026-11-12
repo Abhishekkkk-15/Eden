@@ -82,6 +82,47 @@ console.log(formatConsoleTable(report));
 
 ---
 
+## 💾 Saving & Comparing Reports
+
+### Storing Reports (JSON & Markdown)
+```typescript
+import { saveEvaluationReport } from "@workspace/retrieval-evals";
+
+// Automatically writes both .json (for machines) and .md (for humans):
+const { jsonPath, markdownPath } = await saveEvaluationReport(report, {
+  outputDir: "./eval-reports",
+  filename: "baseline_q1", // optional custom filename
+  formats: ["json", "markdown"],
+});
+```
+
+### Comparing Two Runs (A/B Testing or Regression Testing)
+Compare baseline search with a new model, prompt, or hybrid weighting:
+
+```typescript
+import {
+  loadEvaluationReportFromJson,
+  compareEvaluationReports,
+  saveComparisonReport,
+  formatComparisonMarkdown,
+} from "@workspace/retrieval-evals";
+
+// 1. Load baseline and candidate reports
+const baseline = await loadEvaluationReportFromJson("./eval-reports/baseline.json");
+const candidate = await loadEvaluationReportFromJson("./eval-reports/candidate.json");
+
+// 2. Compare runs
+const comparison = compareEvaluationReports(baseline, candidate, {
+  regressionThreshold: 0.05, // flags queries where score dropped by >= 0.05
+});
+
+// 3. Print or save diff markdown
+console.log(formatComparisonMarkdown(comparison));
+await saveComparisonReport(comparison, { outputDir: "./eval-reports" });
+```
+
+---
+
 ## 🧪 Usage in Eden
 
 ```typescript

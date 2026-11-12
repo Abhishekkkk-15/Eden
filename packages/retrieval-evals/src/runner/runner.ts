@@ -19,6 +19,7 @@ export interface RunRetrievalEvalOptions {
   aiClient?: AIClient;
   concurrency?: number;
   k?: number;
+  metadata?: Record<string, unknown>;
   onProgress?: (progress: RunProgress) => void;
 }
 
@@ -26,7 +27,7 @@ export interface RunRetrievalEvalOptions {
  * Executes a retrieval evaluation over an evaluation dataset against a retriever function.
  */
 export async function runRetrievalEval(options: RunRetrievalEvalOptions): Promise<EvaluationReport> {
-  const { dataset, retriever, metrics, aiClient, concurrency = 4, k, onProgress } = options;
+  const { dataset, retriever, metrics, aiClient, concurrency = 4, k, metadata, onProgress } = options;
   const startTime = Date.now();
   const pool = createAsyncPool(concurrency);
   let completed = 0;
@@ -104,9 +105,11 @@ export async function runRetrievalEval(options: RunRetrievalEvalOptions): Promis
 
   return {
     datasetName: dataset.name,
+    timestamp: new Date().toISOString(),
     totalCases: dataset.cases.length,
     durationMs,
     summary,
     details,
+    metadata,
   };
 }

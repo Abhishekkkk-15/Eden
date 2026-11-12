@@ -25,8 +25,49 @@ export interface MetricSummary {
 
 export interface EvaluationReport {
   datasetName: string;
+  timestamp: string;
   totalCases: number;
   durationMs: number;
   summary: Record<string, MetricSummary>;
   details: QueryEvaluationResult[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface MetricDelta {
+  name: string;
+  baselineMean: number;
+  candidateMean: number;
+  delta: number;
+  percentChange: number;
+  status: "improved" | "regressed" | "unchanged";
+}
+
+export interface QueryDelta {
+  caseId: string | number;
+  query: string;
+  metricName: string;
+  baselineScore: number;
+  candidateScore: number;
+  delta: number;
+  status: "improved" | "regressed" | "unchanged";
+}
+
+export interface ComparisonReport {
+  baselineName: string;
+  candidateName: string;
+  timestamp: string;
+  metrics: Record<string, MetricDelta>;
+  regressions: QueryDelta[];
+  improvements: QueryDelta[];
+}
+
+export interface SaveReportOptions {
+  outputDir?: string;
+  filename?: string;
+  formats?: Array<"json" | "markdown">;
+}
+
+export interface SavedReportPaths {
+  jsonPath?: string;
+  markdownPath?: string;
 }
