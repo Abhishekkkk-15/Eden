@@ -6,8 +6,8 @@ const router: IRouter = Router();
 
 router.get("/search", async (req, res) => {
   const user = (req as any).user;
-  const { q } = SearchWorkspaceQueryParams.parse(req.query);
-  const hits = await searchWorkspace(user.id, q, 20);
+  const { q, limit, mode, includeContent } = SearchWorkspaceQueryParams.parse(req.query);
+  const hits = await searchWorkspace(user.id, q, { limit, mode, includeContent });
   res.json(hits);
 });
 

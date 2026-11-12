@@ -16,8 +16,15 @@ export type RagHit = {
   sourceId: number | null;
   title: string;
   snippet: string;
+  content?: string;
   score: number;
 };
+
+export interface SearchWorkspaceOptions {
+  limit?: number;
+  mode?: "hybrid" | "semantic" | "fts";
+  includeContent?: boolean;
+}
 
 type TsMode = "websearch" | "plain";
 
@@ -83,6 +90,7 @@ async function searchWorkspaceWithMode(
   q: string,
   limit: number,
   mode: TsMode,
+  includeContent = false,
 ): Promise<RagHit[]> {
   const tsq = tsQueryFragment(q, mode);
 
@@ -111,7 +119,7 @@ async function searchWorkspaceWithMode(
   `);
 
   const sourceRows = await db.execute(sql`
-    SELECT s.id, s.title, s.summary,
+    SELECT s.id, s.title, s.summary, s.content,
            ts_rank(to_tsvector('english', s.title || ' ' || coalesce(s.summary, '')), ${tsq}) AS score,
            ts_headline('english', coalesce(s.summary, s.title), ${tsq},
              'StartSel=, StopSel=, MaxFragments=1, MaxWords=24, MinWords=6') AS snippet
@@ -153,6 +161,7 @@ async function searchWorkspaceWithMode(
       sourceId: null,
       title: String(r.page_title),
       snippet: String(r.snippet ?? r.content ?? "").slice(0, 240),
+      content: includeContent ? String(r.content ?? "") : undefined,
       score: Number(r.score) || 0,
     });
   }
@@ -164,6 +173,7 @@ async function searchWorkspaceWithMode(
       sourceId: Number(r.id),
       title: String(r.title),
       snippet: String(r.snippet ?? r.summary ?? r.title ?? ""),
+      content: includeContent ? String(r.summary ?? r.content ?? "") : undefined,
       score: Number(r.score) || 0,
     });
   }
@@ -175,6 +185,7 @@ async function searchWorkspaceWithMode(
       sourceId: Number(r.source_id),
       title: String(r.source_title),
       snippet: String(r.snippet ?? r.content ?? "").slice(0, 240),
+      content: includeContent ? String(r.content ?? "") : undefined,
       score: Number(r.score) || 0,
     });
   }
@@ -211,25 +222,54 @@ async function semanticSearchChunks(
   }));
 }
 
-/** Hybrid search: FTS + semantic via Reciprocal Rank Fusion (RRF). Falls back gracefully to FTS-only. */
-export async function searchWorkspace(userId: string, query: string, limit = 12): Promise<RagHit[]> {
+/** Hybrid, Semantic, or FTS search. Supports Reciprocal Rank Fusion (RRF) and graceful fallback. */
+export async function searchWorkspace(
+  userId: string,
+  query: string,
+  options?: number | SearchWorkspaceOptions,
+): Promise<RagHit[]> {
+  const opts: SearchWorkspaceOptions =
+    typeof options === "number" ? { limit: options } : (options ?? {});
+  const limit = opts.limit ?? 12;
+  const mode = opts.mode ?? "hybrid";
+  const includeContent = opts.includeContent ?? false;
+
   const q = query.trim();
   if (!q) return [];
 
-  let ftsHits = await searchWorkspaceWithMode(userId, q, limit * 2, "websearch");
-  if (ftsHits.length === 0) {
-    ftsHits = await searchWorkspaceWithMode(userId, q, limit * 2, "plain");
+  let ftsHits: RagHit[] = [];
+  if (mode !== "semantic") {
+    ftsHits = await searchWorkspaceWithMode(userId, q, limit * 2, "websearch", includeContent);
+    if (ftsHits.length === 0) {
+      ftsHits = await searchWorkspaceWithMode(userId, q, limit * 2, "plain", includeContent);
+    }
+    if (mode === "fts") {
+      return ftsHits.slice(0, limit);
+    }
   }
 
   // Try semantic search (gracefully skip if unavailable or no API key)
   let semanticChunks: Awaited<ReturnType<typeof semanticSearchChunks>> = [];
   try {
     if (pgvectorEnabled) {
-      const embedding = await generateEmbedding(q);
+      const embedding = await generateEmbedding(q, "query");
       semanticChunks = await semanticSearchChunks(userId, embedding, limit * 2);
     }
   } catch {
     // Semantic unavailable — continue with FTS only
+  }
+
+  if (mode === "semantic") {
+    return semanticChunks.slice(0, limit).map((chunk) => ({
+      kind: "chunk",
+      refId: chunk.id,
+      pageId: null,
+      sourceId: chunk.sourceId,
+      title: chunk.sourceTitle,
+      snippet: chunk.content.slice(0, 240),
+      content: includeContent ? chunk.content : undefined,
+      score: chunk.similarity,
+    }));
   }
 
   if (semanticChunks.length === 0) {
@@ -257,6 +297,9 @@ export async function searchWorkspace(userId: string, query: string, limit = 12)
     const existing = scoreMap.get(key);
     if (existing) {
       existing.rrf += rrfScore;
+      if (includeContent && !existing.hit.content) {
+        existing.hit.content = chunk.content;
+      }
     } else {
       scoreMap.set(key, {
         hit: {
@@ -266,6 +309,7 @@ export async function searchWorkspace(userId: string, query: string, limit = 12)
           sourceId: chunk.sourceId,
           title: chunk.sourceTitle,
           snippet: chunk.content.slice(0, 240),
+          content: includeContent ? chunk.content : undefined,
           score: chunk.similarity,
         },
         rrf: rrfScore,
@@ -283,29 +327,35 @@ export async function buildRagContext(userId: string, query: string): Promise<{
   contextText: string;
   citations: Citation[];
 }> {
-  const hits = await searchWorkspace(userId, query, 14);
+  const hits = await searchWorkspace(userId, query, { limit: 14, includeContent: true });
   if (hits.length === 0) return { contextText: "", citations: [] };
 
   const citationMap = new Map<string, Citation>();
   const blocks: string[] = [];
 
   for (const hit of hits) {
-    let text = hit.snippet;
-    if (hit.kind === "block" && hit.refId) {
-      const [block] = await db.select().from(blocksTable).where(eq(blocksTable.id, hit.refId));
-      if (block) text = block.content;
-    } else if (hit.kind === "chunk" && hit.refId) {
-      const [chunk] = await db
-        .select()
-        .from(sourceChunksTable)
-        .where(eq(sourceChunksTable.id, hit.refId));
-      if (chunk) text = chunk.content;
-    } else if (hit.kind === "page" && hit.refId) {
+    let text = hit.content || hit.snippet;
+    if (!hit.content) {
+      if (hit.kind === "block" && hit.refId) {
+        const [block] = await db.select().from(blocksTable).where(eq(blocksTable.id, hit.refId));
+        if (block) text = block.content;
+      } else if (hit.kind === "chunk" && hit.refId) {
+        const [chunk] = await db
+          .select()
+          .from(sourceChunksTable)
+          .where(eq(sourceChunksTable.id, hit.refId));
+        if (chunk) text = chunk.content;
+      } else if (hit.kind === "source" && hit.refId) {
+        const [source] = await db.select().from(sourcesTable).where(eq(sourcesTable.id, hit.refId));
+        if (source) text = source.summary || source.content.slice(0, 1200);
+      }
+    }
+    if (hit.kind === "page" && hit.refId) {
       const [page] = await db.select().from(pagesTable).where(eq(pagesTable.id, hit.refId));
       if (!page) continue;
       if (page.kind === "folder") {
         text = await buildFolderInventoryText(hit.refId, userId, page.title);
-      } else {
+      } else if (!hit.content) {
         const blockList = await db
           .select()
           .from(blocksTable)
@@ -313,9 +363,6 @@ export async function buildRagContext(userId: string, query: string): Promise<{
           .limit(20);
         text = blockList.map((b) => b.content).filter(Boolean).join("\n");
       }
-    } else if (hit.kind === "source" && hit.refId) {
-      const [source] = await db.select().from(sourcesTable).where(eq(sourcesTable.id, hit.refId));
-      if (source) text = source.summary || source.content.slice(0, 1200);
     }
 
     if (!text || text.trim().length === 0) continue;
