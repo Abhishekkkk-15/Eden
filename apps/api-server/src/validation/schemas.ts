@@ -117,7 +117,7 @@ export const DeleteSourceParams = z.object({
 
 export const SearchWorkspaceQueryParams = z.object({
   q: z.coerce.string(),
-  limit: z.coerce.number().min(1).max(100).default(12),
+  limit: z.coerce.number().min(1).max(100).default(20),
   mode: z.enum(["hybrid", "semantic", "fts"]).default("hybrid"),
   includeContent: z
     .preprocess((val) => {

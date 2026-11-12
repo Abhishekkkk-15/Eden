@@ -10,11 +10,15 @@ export interface SearchResult {
   sourceId: number | null;
   title: string;
   snippet: string;
+  content?: string;
   score: number;
 }
 
 export interface SearchWorkspaceParams {
   q: string;
+  limit?: number;
+  mode?: "hybrid" | "semantic" | "fts";
+  includeContent?: boolean;
 }
 
 function authHeaders(): HeadersInit {
@@ -22,11 +26,16 @@ function authHeaders(): HeadersInit {
 }
 
 export function getSearchWorkspaceQueryKey(params: SearchWorkspaceParams) {
-  return ["search", params.q] as const;
+  return ["search", params.q, params.limit, params.mode, params.includeContent] as const;
 }
 
 async function searchWorkspaceRequest(params: SearchWorkspaceParams): Promise<SearchResult[]> {
-  const res = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(params.q)}`, {
+  const query = new URLSearchParams({ q: params.q });
+  if (params.limit !== undefined) query.set("limit", String(params.limit));
+  if (params.mode !== undefined) query.set("mode", params.mode);
+  if (params.includeContent !== undefined) query.set("includeContent", String(params.includeContent));
+
+  const res = await fetch(`${API_BASE_URL}/search?${query.toString()}`, {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to search workspace");
