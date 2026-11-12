@@ -194,3 +194,27 @@ const report = await runRetrievalEval({
 
 console.log(formatMarkdownReport(report));
 ```
+
+---
+
+## ⚡ Built-In Rate Limit & 429 Retry Engine
+
+All AI calls (`embeddings.create`, `chat.completions.create`, LLM judges, and semantic similarity metrics) are automatically protected by an exponential backoff retry loop with random jitter and `Retry-After` header detection.
+
+You can also use the standalone utility to protect your own custom retriever or external API calls:
+
+```typescript
+import { withRateLimitRetry } from "@workspace/retrieval-evals";
+
+const result = await withRateLimitRetry(
+  async () => {
+    return await externalRateLimitedCall();
+  },
+  {
+    maxRetries: 5,       // Default: 5
+    initialDelayMs: 2000,// Default: 2000ms (2s -> 4s -> 8s ...)
+    backoffFactor: 2,    // Default: 2
+    maxDelayMs: 30000,   // Default: 30000ms (30s ceiling)
+  }
+);
+```

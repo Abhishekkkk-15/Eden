@@ -1,5 +1,6 @@
 import type { Metric } from "../types/metric.js";
 import type { AIClient } from "../types/client.js";
+import type { RetryOptions } from "../utils/retry.js";
 import { mrr } from "./traditional/mrr.js";
 import { hitRate } from "./traditional/hit-rate.js";
 import { precisionAtK } from "./traditional/precision-at-k.js";
@@ -15,6 +16,7 @@ export interface PresetOptions {
   chatClient?: AIClient;
   embeddingModel?: string;
   chatModel?: string;
+  retryOptions?: RetryOptions;
 }
 
 export type MetricPresetName = "standard" | "semantic" | "all";
@@ -40,13 +42,15 @@ export const presets = {
     chatClient?: AIClient;
     embeddingModel?: string;
     chatModel?: string;
+    retryOptions?: RetryOptions;
   }): Metric[] {
     const embClient = options?.embeddingClient ?? options?.aiClient;
     const chClient = options?.chatClient ?? options?.aiClient;
+    const retryOptions = options?.retryOptions;
     return [
-      semanticSimilarity({ aiClient: embClient, model: options?.embeddingModel }),
-      contextRelevance({ aiClient: chClient, model: options?.chatModel }),
-      contextRecall({ aiClient: chClient, model: options?.chatModel }),
+      semanticSimilarity({ aiClient: embClient, model: options?.embeddingModel, retryOptions }),
+      contextRelevance({ aiClient: chClient, model: options?.chatModel, retryOptions }),
+      contextRecall({ aiClient: chClient, model: options?.chatModel, retryOptions }),
     ];
   },
 

@@ -1,11 +1,13 @@
 import type { Metric, MetricContext, MetricResult } from "../../types/metric.js";
 import type { AIClient } from "../../types/client.js";
+import { withRateLimitRetry, type RetryOptions } from "../../utils/retry.js";
 
 export interface ContextRelevanceOptions {
   aiClient?: AIClient;
   model?: string;
   topK?: number;
   name?: string;
+  retryOptions?: RetryOptions;
 }
 
 const SYSTEM_PROMPT = `You are an expert AI evaluator assessing Retrieval Augmented Generation (RAG) retrieval quality.
@@ -44,6 +46,8 @@ export function contextRelevance(options?: ContextRelevanceOptions): Metric {
         );
       }
 
+      const chat = client.chat;
+
       const { queryCase, retrieved } = context;
       const chunks = retrieved
         .slice(0, topK)
@@ -64,15 +68,19 @@ ${chunks}
 
 Evaluate the Context Relevance score according to the rubric.`;
 
-      const response = await client.chat.completions.create({
-        model,
-        temperature: 0.0,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userPrompt },
-        ],
-      });
+      const response = await withRateLimitRetry(
+        () =>
+          chat.completions.create({
+            model,
+            temperature: 0.0,
+            response_format: { type: "json_object" },
+            messages: [
+              { role: "system", content: SYSTEM_PROMPT },
+              { role: "user", content: userPrompt },
+            ],
+          }),
+        options?.retryOptions
+      );
 
       const rawContent = response.choices?.[0]?.message?.content?.trim() ?? "{}";
       try {

@@ -10,6 +10,7 @@ import type {
 } from "./types/results.js";
 import { loadDataset, loadDatasetFromJson, loadDatasetFromJsonl } from "./dataset/loader.js";
 import { resolveMetrics, type MetricPresetName, type PresetOptions } from "./metrics/presets.js";
+import type { RetryOptions } from "./utils/retry.js";
 import { runRetrievalEval, type RunProgress } from "./runner/runner.js";
 import { compareEvaluationReports } from "./runner/comparator.js";
 import { formatConsoleTable } from "./reporters/console.js";
@@ -84,6 +85,11 @@ export interface EvaluateOptions {
   chatModel?: string;
 
   /**
+   * Optional rate-limit retry options (exponential backoff & jitter on 429) for AI calls.
+   */
+  retryOptions?: RetryOptions;
+
+  /**
    * Output formatting to terminal:
    * - `true` or `"table"`: prints formatted ASCII table
    * - `"markdown"`: prints markdown formatted report
@@ -148,6 +154,7 @@ export async function evaluate(options: EvaluateOptions): Promise<EvaluateResult
     concurrency = 4,
     embeddingModel,
     chatModel,
+    retryOptions,
     print = true,
     save = false,
     compareWith,
@@ -177,6 +184,7 @@ export async function evaluate(options: EvaluateOptions): Promise<EvaluateResult
     chatClient,
     embeddingModel,
     chatModel,
+    retryOptions,
   };
   const metrics = resolveMetrics(metricsInput, presetOptions);
 

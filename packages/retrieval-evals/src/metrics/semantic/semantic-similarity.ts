@@ -1,6 +1,7 @@
 import type { Metric, MetricContext, MetricResult } from "../../types/metric.js";
 import type { AIClient } from "../../types/client.js";
 import { cosineSimilarity } from "./cosine.js";
+import { withRateLimitRetry, type RetryOptions } from "../../utils/retry.js";
 
 export interface SemanticSimilarityOptions {
   aiClient?: AIClient;
@@ -8,6 +9,7 @@ export interface SemanticSimilarityOptions {
   topK?: number;
   aggregation?: "max" | "mean";
   name?: string;
+  retryOptions?: RetryOptions;
 }
 
 /**
@@ -25,11 +27,13 @@ export function semanticSimilarity(options?: SemanticSimilarityOptions): Metric 
     description: `Cosine semantic similarity between query and retrieved chunks using ${model} (${aggregation})`,
     async evaluate(context: MetricContext): Promise<MetricResult> {
       const client = options?.aiClient ?? context.aiClient;
-      if (!client) {
+      if (!client?.embeddings) {
         throw new Error(
           `Metric "${metricName}" requires an AIClient with embeddings support. Pass aiClient in options or runner.`
         );
       }
+
+      const embeddings = client.embeddings;
 
       const { queryCase, retrieved } = context;
       const chunks = retrieved
@@ -46,10 +50,14 @@ export function semanticSimilarity(options?: SemanticSimilarityOptions): Metric 
 
       // Generate embedding for query and candidate chunks
       const textsToEmbed = [queryCase.query, ...chunks];
-      const embeddingRes = await client.embeddings.create({
-        model,
-        input: textsToEmbed,
-      });
+      const embeddingRes = await withRateLimitRetry(
+        () =>
+          embeddings.create({
+            model,
+            input: textsToEmbed,
+          }),
+        options?.retryOptions
+      );
 
       const vectors = embeddingRes.data.map((d) => d.embedding);
       const queryVector = vectors[0];

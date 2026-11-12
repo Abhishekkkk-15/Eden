@@ -25,3 +25,6 @@ export * from "./reporters/index.js";
 
 // High-Level All-In-One API
 export * from "./evaluate.js";
+
+// Rate-Limit Retry Utilities
+export * from "./utils/retry.js";
